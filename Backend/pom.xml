@@ -1,0 +1,61 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/maven-v4_0_0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <groupId>iopwisp</groupId>
+    <artifactId>taskhub-backend</artifactId>
+    <version>1.0.0</version>
+    <packaging>pom</packaging>
+
+    <name>taskhub-backend</name>
+    <description>TaskHub microservices backend</description>
+
+    <properties>
+        <java.version>21</java.version>
+        <spring.boot.version>3.3.5</spring.boot.version>
+        <spring.cloud.version>2023.0.3</spring.cloud.version>
+    </properties>
+
+    <modules>
+        <module>auth-service</module>
+        <module>judge-service</module>
+        <module>notification-service</module>
+        <module>rating-service</module>
+        <module>api-gateway</module>
+        <module>submission-service</module>
+        <module>user-service</module>
+        <module>task-service</module>
+        <module>discovery-service</module>
+    </modules>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                    <version>${spring.boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                    <version>${spring.cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-maven-plugin</artifactId>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+</project>

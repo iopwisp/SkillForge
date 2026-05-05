@@ -1,0 +1,49 @@
+server:
+  port: 8085
+
+spring:
+  application:
+    name: judge-service
+  kafka:
+    bootstrap-servers: ${KAFKA_SERVERS:localhost:9092}
+    consumer:
+      group-id: judge-service-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+judge:
+  executor:
+    timeout: ${JUDGE_TIMEOUT:5000}
+    memory-limit: ${JUDGE_MEMORY_LIMIT:256}
+  supported-languages:
+    - java
+    - python
+    - cpp
+    - javascript
+
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+  instance:
+    preferIpAddress: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    root: INFO
+    iopwisp: DEBUG

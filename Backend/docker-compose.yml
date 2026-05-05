@@ -1,0 +1,310 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: taskhub-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-taskhub}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - .\docker\postgres\init-multiple-dbs.sql:/docker-entrypoint-initdb.d/init-multiple-dbs.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d taskhub"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - taskhub-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: taskhub-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - taskhub-network
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    container_name: taskhub-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - taskhub-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: taskhub-kafka
+    depends_on:
+      - zookeeper
+    # Internal listener stays on 9092 (used by other stack services via the
+    # `kafka` network alias). The host-facing listener uses 19092 to avoid
+    # colliding with any other Kafka the developer may already have on 9092.
+    # Override with the KAFKA_HOST_PORT env var if you want a different one.
+    ports:
+      - "${KAFKA_HOST_PORT:-19092}:19092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:19092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:${KAFKA_HOST_PORT:-19092}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    networks:
+      - taskhub-network
+
+  discovery-service:
+    build:
+      context: .\discovery-service
+      dockerfile: Dockerfile
+    container_name: taskhub-discovery-service
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      EUREKA_HOST: discovery-service
+    ports:
+      - "8761:8761"
+    depends_on:
+      - postgres
+      - redis
+      - kafka
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8761/actuator/health | grep UP"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+    networks:
+      - taskhub-network
+
+  api-gateway:
+    build:
+      context: .\api-gateway
+      dockerfile: Dockerfile
+    container_name: taskhub-api-gateway
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      EUREKA_URL: ${EUREKA_URL:-http://discovery-service:8761/eureka/}
+    ports:
+      - "8080:8080"
+    depends_on:
+      - discovery-service
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep UP"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+    networks:
+      - taskhub-network
+
+  auth-service:
+    build:
+      context: .\auth-service
+      dockerfile: Dockerfile
+    container_name: taskhub-auth-service
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      DB_URL: jdbc:postgresql://postgres:5432/auth_service_db
+      DB_USERNAME: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      JWT_SECRET: ${JWT_SECRET:-taskhub-jwt-secret-taskhub-jwt-secret-taskhub}
+      EUREKA_URL: ${EUREKA_URL:-http://discovery-service:8761/eureka/}
+    ports:
+      - "8081:8081"
+    depends_on:
+      - discovery-service
+      - postgres
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/actuator/health | grep UP"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+    networks:
+      - taskhub-network
+
+  user-service:
+    build:
+      context: .\user-service
+      dockerfile: Dockerfile
+    container_name: taskhub-user-service
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      DB_URL: jdbc:postgresql://postgres:5432/user_service_db
+      DB_USERNAME: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      JWT_SECRET: ${JWT_SECRET:-taskhub-jwt-secret-taskhub-jwt-secret-taskhub}
+      EUREKA_URL: ${EUREKA_URL:-http://discovery-service:8761/eureka/}
+      SUBMISSION_SERVICE_URL: http://submission-service:8084
+    ports:
+      - "8082:8082"
+    depends_on:
+      - discovery-service
+      - postgres
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8082/actuator/health | grep UP"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+    networks:
+      - taskhub-network
+
+  task-service:
+    build:
+      context: .\task-service
+      dockerfile: Dockerfile
+    container_name: taskhub-task-service
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      DB_URL: jdbc:postgresql://postgres:5432/task_service_db
+      DB_USERNAME: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      JWT_SECRET: ${JWT_SECRET:-taskhub-jwt-secret-taskhub-jwt-secret-taskhub}
+      EUREKA_URL: ${EUREKA_URL:-http://discovery-service:8761/eureka/}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+    ports:
+      - "8083:8083"
+    depends_on:
+      - discovery-service
+      - postgres
+      - redis
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8083/actuator/health | grep UP"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+    networks:
+      - taskhub-network
+
+  submission-service:
+    build:
+      context: .\submission-service
+      dockerfile: Dockerfile
+    container_name: taskhub-submission-service
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      DB_URL: jdbc:postgresql://postgres:5432/submission_service_db
+      DB_USERNAME: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      JWT_SECRET: ${JWT_SECRET:-taskhub-jwt-secret-taskhub-jwt-secret-taskhub}
+      EUREKA_URL: ${EUREKA_URL:-http://discovery-service:8761/eureka/}
+      KAFKA_SERVERS: ${KAFKA_SERVERS:-kafka:9092}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+    ports:
+      - "8084:8084"
+    depends_on:
+      - discovery-service
+      - postgres
+      - kafka
+      - redis
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8084/actuator/health | grep UP"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+    networks:
+      - taskhub-network
+
+  judge-service:
+    build:
+      context: .\judge-service
+      dockerfile: Dockerfile
+    container_name: taskhub-judge-service
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      EUREKA_URL: ${EUREKA_URL:-http://discovery-service:8761/eureka/}
+      KAFKA_SERVERS: ${KAFKA_SERVERS:-kafka:9092}
+    ports:
+      - "8085:8085"
+    depends_on:
+      - discovery-service
+      - kafka
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8085/actuator/health | grep UP"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+    networks:
+      - taskhub-network
+
+  rating-service:
+    build:
+      context: .\rating-service
+      dockerfile: Dockerfile
+    container_name: taskhub-rating-service
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      DB_URL: jdbc:postgresql://postgres:5432/rating_service_db
+      DB_USERNAME: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      JWT_SECRET: ${JWT_SECRET:-taskhub-jwt-secret-taskhub-jwt-secret-taskhub}
+      EUREKA_URL: ${EUREKA_URL:-http://discovery-service:8761/eureka/}
+      KAFKA_SERVERS: ${KAFKA_SERVERS:-kafka:9092}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+    ports:
+      - "8086:8086"
+    depends_on:
+      - discovery-service
+      - postgres
+      - kafka
+      - redis
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8086/actuator/health | grep UP"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+    networks:
+      - taskhub-network
+
+  notification-service:
+    build:
+      context: .\notification-service
+      dockerfile: Dockerfile
+    container_name: taskhub-notification-service
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-prod}
+      DB_URL: jdbc:postgresql://postgres:5432/notification_service_db
+      DB_USERNAME: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      JWT_SECRET: ${JWT_SECRET:-taskhub-jwt-secret-taskhub-jwt-secret-taskhub}
+      EUREKA_URL: ${EUREKA_URL:-http://discovery-service:8761/eureka/}
+      KAFKA_SERVERS: ${KAFKA_SERVERS:-kafka:9092}
+      MAIL_HOST: smtp.gmail.com
+      MAIL_PORT: 587
+      MAIL_USERNAME: ${MAIL_USERNAME:-placeholder@example.com}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-change-me}
+    ports:
+      - "8087:8087"
+    depends_on:
+      - discovery-service
+      - postgres
+      - kafka
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8087/actuator/health | grep UP"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+    networks:
+      - taskhub-network
+
+volumes:
+  postgres-data:
+
+networks:
+  taskhub-network:
+    driver: bridge

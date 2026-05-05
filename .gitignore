@@ -1,0 +1,45 @@
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Editors and OS metadata
+.idea/
+.vscode/
+**/.idea/
+**/.vscode/
+NUL
+*.iml
+*.ipr
+*.iws
+.DS_Store
+**/.DS_Store
+
+# Logs
+logs/
+**/logs/
+*.log
+**/*.log
+
+# Node / frontend build output
+node_modules/
+**/node_modules/
+.react-router/
+**/.react-router/
+build/
+**/build/
+dist/
+**/dist/
+coverage/
+**/coverage/
+
+# Local app data
+data/
+**/data/
+
+# Java / Maven build output
+target/
+**/target/

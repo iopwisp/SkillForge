@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <springProfile name="!prod">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+            </encoder>
+        </appender>
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+        <logger name="iopwisp" level="DEBUG"/>
+    </springProfile>
+
+    <springProfile name="prod">
+        <appender name="CONSOLE_JSON" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+                <pattern>{"timestamp":"%d{ISO8601}","level":"%level","service":"task-service","thread":"%thread","logger":"%logger","message":"%msg"}%n</pattern>
+            </encoder>
+        </appender>
+        <root level="INFO">
+            <appender-ref ref="CONSOLE_JSON"/>
+        </root>
+        <logger name="iopwisp" level="DEBUG"/>
+    </springProfile>
+
+</configuration>

@@ -1,0 +1,25 @@
+{
+  "name": "skillforge-server",
+  "version": "1.1.0",
+  "description": "SkillForge backend - Node.js + Express + SQLite",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "seed": "node src/seed.js",
+    "test": "node test/judge.test.mjs && node test/seed-backend.test.mjs && node test/seed-frontend.test.mjs && node test/seed-sql.test.mjs"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^11.7.0",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.0",
+    "zod": "^3.24.1"
+  }
+}

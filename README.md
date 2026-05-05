@@ -221,7 +221,26 @@ Copy `.env.example` → `.env` in each side and tweak as needed:
 | `GOOGLE_FRONTEND_REDIRECT` | `http://localhost:5173/auth/callback` | Where to bounce the browser after success |
 | `CORS_ORIGIN` | `http://localhost:5173,...` | Comma-separated allowlist |
 
-### `Frontend/SkillForge-Frontend/.env`
+### `Backend/.env` _(legacy Docker Compose stack only)_
+This file is only for the legacy Spring microservices scaffold in `Backend/docker-compose.yml`.
+Keep real values in local `Backend/.env` and commit only `Backend/.env.example`.
+
+| Var | Default | Purpose |
+| --- | --- | --- |
+| `POSTGRES_USER` | `postgres` | Shared Postgres username for the compose stack |
+| `POSTGRES_PASSWORD` | _(change me)_ | Shared Postgres password for the compose stack |
+| `POSTGRES_DB` | `taskhub` | Default database used by the Postgres container |
+| `POSTGRES_MULTIPLE_DATABASES` | service DB list | Databases created by the init script |
+| `SPRING_PROFILES_ACTIVE` | `prod` | Spring profile for all legacy services |
+| `JWT_SECRET` | _(change me)_ | Shared JWT signing secret for legacy services |
+| `EUREKA_URL` | `http://discovery-service:8761/eureka/` | Eureka discovery URL |
+| `REDIS_HOST` | `redis` | Redis hostname inside compose |
+| `KAFKA_SERVERS` | `kafka:9092` | Kafka bootstrap servers inside compose |
+| `KAFKA_HOST_PORT` | `19092` | Host port exposed for Kafka |
+| `MAIL_USERNAME` | `placeholder@example.com` | SMTP username for notification-service |
+| `MAIL_PASSWORD` | _(change me)_ | SMTP password for notification-service |
+
+### `Frontend/Frontend/.env`
 | Var | Default | Purpose |
 | --- | --- | --- |
 | `VITE_API_URL` | `http://localhost:4000/api` | Backend base URL the SPA calls |
