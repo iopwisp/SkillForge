@@ -1,0 +1,238 @@
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --font-size: 14px;
+  --radius: 0.75rem;
+
+  /* SkillForge Light Theme — indigo + amber accent on warm-neutral surfaces */
+  --background: oklch(0.99 0.005 256);
+  --foreground: oklch(0.18 0.02 264);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.02 264);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.02 264);
+
+  --primary: oklch(0.49 0.21 274);          /* indigo-600 */
+  --primary-foreground: oklch(0.99 0 0);
+
+  --secondary: oklch(0.96 0.01 262);
+  --secondary-foreground: oklch(0.18 0.02 264);
+  --muted: oklch(0.96 0.005 262);
+  --muted-foreground: oklch(0.50 0.02 262);
+  --accent: oklch(0.95 0.02 90);            /* warm amber tint */
+  --accent-foreground: oklch(0.30 0.10 60);
+
+  --destructive: oklch(0.55 0.21 25);
+  --destructive-foreground: oklch(1 0 0);
+  --success: oklch(0.62 0.18 152);
+  --success-foreground: oklch(0.99 0 0);
+  --warning: oklch(0.78 0.16 80);
+  --warning-foreground: oklch(0.25 0.05 60);
+
+  --border: oklch(0.92 0.005 262);
+  --input: oklch(0.97 0.005 262);
+  --input-background: oklch(0.97 0.005 262);
+  --ring: oklch(0.49 0.21 274);
+
+  --switch-background: oklch(0.85 0.01 262);
+
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --chart-1: oklch(0.55 0.20 274);
+  --chart-2: oklch(0.65 0.16 162);
+  --chart-3: oklch(0.72 0.16 70);
+  --chart-4: oklch(0.62 0.22 30);
+  --chart-5: oklch(0.55 0.22 304);
+
+  --sidebar: oklch(0.985 0.005 262);
+  --sidebar-foreground: oklch(0.30 0.02 262);
+  --sidebar-primary: oklch(0.49 0.21 274);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.96 0.01 262);
+  --sidebar-accent-foreground: oklch(0.18 0.02 264);
+  --sidebar-border: oklch(0.92 0.005 262);
+  --sidebar-ring: oklch(0.49 0.21 274);
+
+  /* Brand-specific tokens */
+  --brand-indigo: oklch(0.55 0.21 274);
+  --brand-violet: oklch(0.55 0.22 304);
+  --brand-amber:  oklch(0.78 0.16 80);
+  --brand-grad-from: oklch(0.55 0.21 274);
+  --brand-grad-to:   oklch(0.55 0.22 304);
+}
+
+.dark {
+  /* SkillForge Dark Theme — true dark grey, indigo-violet accents */
+  --background: oklch(0.16 0.01 264);
+  --foreground: oklch(0.97 0.005 264);
+  --card: oklch(0.20 0.01 264);
+  --card-foreground: oklch(0.97 0.005 264);
+  --popover: oklch(0.20 0.01 264);
+  --popover-foreground: oklch(0.97 0.005 264);
+
+  --primary: oklch(0.72 0.16 280);          /* indigo-400 — vibrant on dark */
+  --primary-foreground: oklch(0.16 0.01 264);
+
+  --secondary: oklch(0.24 0.015 264);
+  --secondary-foreground: oklch(0.97 0.005 264);
+  --muted: oklch(0.24 0.015 264);
+  --muted-foreground: oklch(0.68 0.02 264);
+  --accent: oklch(0.27 0.04 274);
+  --accent-foreground: oklch(0.97 0.005 264);
+
+  --destructive: oklch(0.62 0.20 22);
+  --destructive-foreground: oklch(0.99 0 0);
+  --success: oklch(0.72 0.18 152);
+  --success-foreground: oklch(0.10 0.02 264);
+  --warning: oklch(0.82 0.16 80);
+  --warning-foreground: oklch(0.16 0.01 264);
+
+  --border: oklch(0.26 0.015 264);
+  --input: oklch(0.24 0.015 264);
+  --input-background: oklch(0.22 0.015 264);
+  --ring: oklch(0.72 0.16 280);
+
+  --switch-background: oklch(0.32 0.02 264);
+
+  --chart-1: oklch(0.72 0.16 280);
+  --chart-2: oklch(0.72 0.18 152);
+  --chart-3: oklch(0.78 0.18 80);
+  --chart-4: oklch(0.68 0.22 30);
+  --chart-5: oklch(0.65 0.22 304);
+
+  --sidebar: oklch(0.18 0.01 264);
+  --sidebar-foreground: oklch(0.92 0.01 264);
+  --sidebar-primary: oklch(0.72 0.16 280);
+  --sidebar-primary-foreground: oklch(0.16 0.01 264);
+  --sidebar-accent: oklch(0.24 0.015 264);
+  --sidebar-accent-foreground: oklch(0.97 0.005 264);
+  --sidebar-border: oklch(0.24 0.015 264);
+  --sidebar-ring: oklch(0.72 0.16 280);
+
+  --brand-indigo: oklch(0.72 0.16 280);
+  --brand-violet: oklch(0.72 0.16 304);
+  --brand-amber:  oklch(0.82 0.16 80);
+  --brand-grad-from: oklch(0.65 0.21 274);
+  --brand-grad-to:   oklch(0.65 0.22 304);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-input-background: var(--input-background);
+  --color-switch-background: var(--switch-background);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-brand-indigo: var(--brand-indigo);
+  --color-brand-violet: var(--brand-violet);
+  --color-brand-amber: var(--brand-amber);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html, body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  html {
+    font-size: var(--font-size);
+    color-scheme: light dark;
+  }
+
+  body {
+    background-image:
+      radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in oklab, var(--brand-indigo) 18%, transparent), transparent 70%),
+      radial-gradient(ellipse 60% 50% at 100% 100%, color-mix(in oklab, var(--brand-violet) 12%, transparent), transparent 70%);
+    background-attachment: fixed;
+  }
+
+  code, kbd, pre, samp, .font-mono {
+    font-family: 'JetBrains Mono', ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace;
+  }
+
+  ::selection {
+    background-color: color-mix(in oklab, var(--brand-indigo) 35%, transparent);
+    color: var(--foreground);
+  }
+}
+
+@layer components {
+  .glass-panel {
+    background: color-mix(in oklab, var(--card) 80%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+  }
+
+  .gradient-text {
+    background-image: linear-gradient(120deg, var(--brand-grad-from), var(--brand-grad-to));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .gradient-bg {
+    background-image: linear-gradient(120deg, var(--brand-grad-from), var(--brand-grad-to));
+  }
+
+  .ring-brand {
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--brand-indigo) 40%, transparent);
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar { width: 8px; height: 8px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 4px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background: var(--muted-foreground);
+  }
+}
