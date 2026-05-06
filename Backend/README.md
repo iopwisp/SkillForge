@@ -16,6 +16,8 @@ npm start          # http://localhost:4000
 ```
 
 See `server/.env.example` for the active Node backend configuration.
+For container platforms such as Render, `Backend/Dockerfile` now builds this
+same Node backend from `server/` rather than the legacy Java scaffold.
 If you intentionally run the legacy Docker compose stack, use `./.env.example` as the template for `./.env`.
 The [project README](../README.md) has the full quick-start.
 

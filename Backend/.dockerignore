@@ -1,0 +1,17 @@
+.git
+.gitignore
+.idea
+.vscode
+.env
+.env.*
+!.env.example
+logs
+docker
+**/node_modules
+**/target
+**/build
+**/dist
+server/data
+server/.env
+server/.env.*
+!server/.env.example
