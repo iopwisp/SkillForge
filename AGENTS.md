@@ -2,7 +2,7 @@
 
 > Quick-start context for AI coding sessions on the SkillForge codebase.
 > Read this BEFORE doing anything else when continuing work after a break.
-> Last updated: 2026-05-07.
+> Last updated: 2026-05-07 (after Phase 0 step #4: pluggable auth).
 
 ---
 
@@ -89,6 +89,11 @@ gcc/g++/python3/make by default; Docker uses a multi-stage build.
 - **0004 — `isolated-vm` for JS judge.** Phase A (in-process V8
   isolate) **shipped**. Phase B (Docker-per-submission for graded
   exams) is Phase 2 of the roadmap.
+- **0005 — Pluggable auth providers.** **Shipped.** Local + Google
+  behind a common provider interface; `AUTH_PROVIDERS` env controls
+  which are registered; frontend discovers via `GET /api/auth/providers`.
+  Microsoft / OIDC / LDAP / SAML drop in as new files in
+  `modules/auth/providers/` for Phase 2.
 
 If you make another big call, write a new ADR (`docs/decisions/000N-*.md`).
 
@@ -96,7 +101,7 @@ If you make another big call, write a new ADR (`docs/decisions/000N-*.md`).
 
 ## 5. What was done in Phase 0 so far
 
-Three commits, in order:
+Five commits, in order:
 
 1. `32f6dd3 chore(phase-0): foundation cleanup and B2B direction setup`
    - Removed Java/Spring scaffold (~14k LOC) — 9 microservices + Maven
@@ -123,6 +128,19 @@ Three commits, in order:
      load.
    - Multi-stage Dockerfile so native modules build in a stage with toolchain
      and the runtime image stays slim.
+4. `c423e3b chore: add AGENTS.md for cross-session context` — this file.
+5. `<next> feat(phase-0): pluggable auth provider abstraction`
+   - `modules/auth/providers/{local,google,index}.js` — provider plugins.
+   - `modules/auth/service.js` is now a thin facade; JWT / refresh /
+     password-change logic stays here, "how to authenticate" lives in
+     providers.
+   - `AUTH_PROVIDERS` env + `GET /api/auth/providers` for runtime discovery.
+   - New generic `/api/auth/oauth/:provider/*` route shape; the legacy
+     `/api/auth/google/*` URLs stay (Google console has them as redirect URI).
+   - 23 unit tests in `test/auth-providers.test.mjs` covering register
+     happy/duplicate paths, login happy/wrong-pw/unknown-user (with no
+     enumeration), refresh rotation + double-use rejection, registry,
+     provider capability flags, google `enabled()` reflects env.
 
 ---
 
@@ -130,14 +148,13 @@ Three commits, in order:
 
 | # | Task | Effort | Notes |
 |---|---|---|---|
-| 4 | Pluggable auth providers (`local` and `google` behind a common interface) | 1–2 days | Sets up later OIDC/Microsoft 365/LDAP without rewriting auth.service. |
+| ~~4~~ | ~~Pluggable auth providers~~ | done | ADR 0005 shipped. |
 | 5 | Pino structured logging + request-id middleware + Sentry/Glitchtip | 1 day | Without this debugging on-prem incidents will be impossible. |
 | 6 | Migrate SQLite → PostgreSQL (ADR 0002), versioned migrations | 3–5 days | Biggest chunk left. Decide between Kysely / Drizzle / raw `pg` during a small spike. CI must run against a real Postgres container. |
 | 7 | `docker-compose.yml` (Postgres + Backend) + `pg_dump` backup script | 0.5 day | Comes with the Postgres migration. |
 | 8 | Integration tests for auth + submissions (supertest) | 1–2 days | Coverage proof for security review. |
 
-Suggested order: 4 → 5 → 6 → 7 → 8. Rationale:
-- Doing auth abstraction now keeps later SSO providers cheap.
+Suggested order: 5 → 6 → 7 → 8. Rationale:
 - Logging/error tracking should be in place BEFORE the Postgres migration
   (which will surface lots of noise that needs to be observable).
 - Postgres is the longest single change; keep it last in the foundation.
@@ -248,31 +265,39 @@ on the first ACCEPTED EASY problem.
 
 ## 11. Where we are right now
 
-The last working commit is **`8060fa4 feat(phase-0): replace Node vm
-with isolated-vm for JS judge`**. Everything in Phase 0 step #2 is
-finished and verified.
+Phase 0 steps #1 (cleanup), #2 (modules), #3 (isolated-vm) and #4
+(pluggable auth) are all done. The most recent feature commit is the
+pluggable-auth one (look at `git log` for the SHA).
 
-**Next concrete action when you next start:** Phase 0 step #4 —
-pluggable auth provider abstraction. Plan:
+**Next concrete action when you next start:** Phase 0 step #5 —
+structured logging + request-id + error tracking. Plan:
 
-1. Create `modules/auth/providers/` with:
-    - `provider.js` (the interface, JS-doc'd: `name`, `start(req)`,
-      `complete(req, res)`, both async returning `{ user }` or throwing
-      `HttpError`),
-    - `local.js` (wraps current register/login flow),
-    - `google.js` (wraps current Google OAuth flow).
-2. Refactor `modules/auth/service.js` to delegate to providers via
-   `getProvider(name)`. Routes register the providers at boot.
-3. Add a config table or env list (`AUTH_PROVIDERS=local,google`) so
-   on-prem deployments can disable Google or add OIDC later.
-4. Document the contract in a new ADR `0005-pluggable-auth.md`.
-5. Update `test/` with a small auth integration smoke (register →
-   login → /me → refresh).
-6. Verify lint + tests + live HTTP register & google `/api/auth/google/url`.
+1. `npm install pino pino-pretty` (pretty for dev only).
+2. Create `shared/logger.js` exporting a configured pino instance:
+    - JSON output in production, pretty in dev (`NODE_ENV` switch).
+    - Default level from `LOG_LEVEL` env (`info` in prod, `debug` in dev).
+    - Redact obvious secrets (`password`, `accessToken`, `refreshToken`,
+      `Authorization` header) via pino's `redact` config.
+3. Create `shared/middleware/request-id.js`: reads `X-Request-Id`
+   header, otherwise generates one (`crypto.randomUUID()`), attaches
+   it to `req.id`, echoes it back in `X-Request-Id` response header,
+   and creates a child logger on `req.log` with `{ reqId }` baked in.
+4. Replace `morgan('dev')` in `index.js` with a `pino-http`-style
+   per-request log line that uses the request's child logger.
+5. Update the global error handler in `index.js` to use `req.log` and
+   include the request id in error logs.
+6. Pick error tracking: **Sentry-compatible Glitchtip** (open source,
+   self-hostable; AITU on-prem can run it next to the app). Add an
+   optional `SENTRY_DSN` env — if set, `@sentry/node` initializes;
+   if not, no-op.
+7. Add `LOG_LEVEL` and `SENTRY_DSN` to `.env.example`.
+8. Refactor any `console.log` / `console.error` in modules to use the
+   logger (or `req.log` in routes/services that have it).
+9. Verify: lint + tests + smoke-start + a `curl -H "X-Request-Id: abc"`
+   shows the same id in the response and in the server logs.
+10. Commit: `feat(phase-0): structured logging + request-id + Sentry/Glitchtip hook`.
 
-Then commit: `feat(phase-0): pluggable auth provider abstraction`.
-
-After that, step #5 (logging) is the next item.
+After that, step #6 (Postgres migration) is the next big chunk.
 
 ---
 

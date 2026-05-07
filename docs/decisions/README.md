@@ -24,3 +24,5 @@ Each file is `NNNN-short-kebab-title.md` and follows a lightweight structure:
   enforced module boundaries
 - [0004](./0004-isolated-judge-runner.md) — Replace Node `vm` with an
   isolated runner for the JS judge
+- [0005](./0005-pluggable-auth-providers.md) — Pluggable auth providers
+  (local + google now; Microsoft/OIDC/LDAP/SAML in Phase 2)

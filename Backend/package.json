@@ -9,7 +9,7 @@
     "dev": "node --watch src/index.js",
     "seed": "node src/shared/seed/index.js",
     "lint": "eslint .",
-    "test": "node test/judge.test.mjs && node test/judge-isolation.test.mjs && node test/seed-backend.test.mjs && node test/seed-frontend.test.mjs && node test/seed-sql.test.mjs"
+    "test": "node test/judge.test.mjs && node test/judge-isolation.test.mjs && node test/auth-providers.test.mjs && node test/seed-backend.test.mjs && node test/seed-frontend.test.mjs && node test/seed-sql.test.mjs"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

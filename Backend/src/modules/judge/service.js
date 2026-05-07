@@ -312,7 +312,7 @@ export function runJsJudge(problem, code) {
   } finally {
     if (context) context.release();
     if (isolate) {
-      try { isolate.dispose(); } catch (_) { /* already disposed */ }
+      try { isolate.dispose(); } catch { /* already disposed */ }
     }
   }
 }
