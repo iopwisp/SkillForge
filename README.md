@@ -20,7 +20,7 @@ progress, climb the leaderboard, and ship like a pro. 🐘
 - 🏆 **Leaderboard** with podium, **profile pages** with activity heatmaps
 - 📜 **Submissions history**, ⭐ **favourites**, ⚙️ **settings**, **dark/light theme**
 - 📱 Fully responsive, accessible, keyboard-friendly
-- ⚡ Boots in seconds — no Docker, no Kafka, no Postgres required
+- ⚡ Boots in seconds — `npm install && npm start`
 
 ## 🧱 Stack
 
@@ -29,19 +29,7 @@ progress, climb the leaderboard, and ship like a pro. 🐘
 | Frontend | React 19, React Router 7 (SPA), Tailwind v4, shadcn/ui, lucide-react|
 | Backend  | Node 20+, Express 4, SQLite (`better-sqlite3`), Zod, JWT, bcryptjs  |
 | OAuth    | Google OAuth 2.0 (manual implementation, zero deps)                 |
-| Database | SQLite (file: `Backend/server/data/skillforge.db`)                  |
-
-> The repo also contains a **legacy Java + Spring Boot microservice scaffold** in
-> `Backend/{auth-service,user-service,task-service,...}`. It is **not** what the
-> SPA talks to (the SPA points at the Node server). The Java services build
-> cleanly with `cd Backend && mvn -DskipTests package` and run with the bundled
-> `docker-compose.yml`, but require Postgres + Kafka + Redis + Eureka — only
-> bring them up if you actually want to play with the microservice flavour.
->
-> **Kafka host port:** to avoid collisions with any other Kafka you may already
-> have running on `9092`, the compose stack exposes its broker on host port
-> `19092` (internal services still use `kafka:9092` on the docker network).
-> Override with `KAFKA_HOST_PORT=9092 docker compose up -d` if you want it back.
+| Database | SQLite (file: `Backend/data/skillforge.db`)                         |
 
 ## 🚀 Quick start (Windows, macOS, Linux)
 
@@ -50,7 +38,7 @@ You need **Node.js 20+** installed. Nothing else.
 ### 1. Backend — `http://localhost:4000`
 
 ```bash
-cd Backend/server
+cd Backend
 npm install
 npm start
 ```
@@ -72,7 +60,7 @@ On first start, it auto-creates `data/skillforge.db` and seeds it with **58 prob
 In a second terminal:
 
 ```bash
-cd Frontend/SkillForge-Frontend
+cd Frontend/Frontend
 npm install
 npm run dev
 ```
@@ -82,7 +70,7 @@ Open **http://localhost:5173** in your browser. ✨
 ### Optional: production build of the frontend
 
 ```bash
-cd Frontend/SkillForge-Frontend
+cd Frontend/Frontend
 npm run build
 npm start              # serves the SPA on http://localhost:3000
 ```
@@ -101,7 +89,7 @@ graceful error until you configure credentials. To enable real Google sign-in:
 2. Create an **OAuth 2.0 Client ID** of type **Web application**
 3. Add **Authorised JavaScript origins**: `http://localhost:5173`
 4. Add **Authorised redirect URIs**: `http://localhost:4000/api/auth/google/callback`
-5. Copy the *Client ID* and *Client Secret* into `Backend/server/.env`:
+5. Copy the *Client ID* and *Client Secret* into `Backend/.env`:
 
    ```env
    GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
@@ -162,7 +150,7 @@ affect rating.
 Each set lives in its own file so it's trivial to extend:
 
 ```
-Backend/server/src/seeds/
+Backend/src/seeds/
 ├── backend.js   ← BACKEND_PROBLEMS array
 ├── frontend.js  ← FRONTEND_PROBLEMS array
 └── sql.js       ← SQL_PROBLEMS array (with shared SHOP/HR/BLOG schemas)
@@ -207,7 +195,7 @@ All routes are under `/api`. Auth endpoints are rate-limited.
 
 Copy `.env.example` → `.env` in each side and tweak as needed:
 
-### `Backend/server/.env`
+### `Backend/.env`
 | Var | Default | Purpose |
 | --- | --- | --- |
 | `PORT` | `4000` | API listen port |
@@ -221,25 +209,6 @@ Copy `.env.example` → `.env` in each side and tweak as needed:
 | `GOOGLE_FRONTEND_REDIRECT` | `http://localhost:5173/auth/callback` | Where to bounce the browser after success |
 | `CORS_ORIGIN` | `http://localhost:5173,...` | Comma-separated allowlist |
 
-### `Backend/.env` _(legacy Docker Compose stack only)_
-This file is only for the legacy Spring microservices scaffold in `Backend/docker-compose.yml`.
-Keep real values in local `Backend/.env` and commit only `Backend/.env.example`.
-
-| Var | Default | Purpose |
-| --- | --- | --- |
-| `POSTGRES_USER` | `postgres` | Shared Postgres username for the compose stack |
-| `POSTGRES_PASSWORD` | _(change me)_ | Shared Postgres password for the compose stack |
-| `POSTGRES_DB` | `taskhub` | Default database used by the Postgres container |
-| `POSTGRES_MULTIPLE_DATABASES` | service DB list | Databases created by the init script |
-| `SPRING_PROFILES_ACTIVE` | `prod` | Spring profile for all legacy services |
-| `JWT_SECRET` | _(change me)_ | Shared JWT signing secret for legacy services |
-| `EUREKA_URL` | `http://discovery-service:8761/eureka/` | Eureka discovery URL |
-| `REDIS_HOST` | `redis` | Redis hostname inside compose |
-| `KAFKA_SERVERS` | `kafka:9092` | Kafka bootstrap servers inside compose |
-| `KAFKA_HOST_PORT` | `19092` | Host port exposed for Kafka |
-| `MAIL_USERNAME` | `placeholder@example.com` | SMTP username for notification-service |
-| `MAIL_PASSWORD` | _(change me)_ | SMTP password for notification-service |
-
 ### `Frontend/Frontend/.env`
 | Var | Default | Purpose |
 | --- | --- | --- |
@@ -249,39 +218,31 @@ Keep real values in local `Backend/.env` and commit only `Backend/.env.example`.
 
 ```
 SkillForge/
-├── Backend/
-│   ├── server/                  ← ⭐ Node + SQLite backend (use this)
-│   │   ├── src/
-│   │   │   ├── index.js         server bootstrap
-│   │   │   ├── db.js            SQLite schema + connection + auto-migrations
-│   │   │   ├── auth.js          JWT + bcrypt helpers, middleware
-│   │   │   ├── judge.js         real SQL & JS judges (sandboxed, with diff)
-│   │   │   ├── seed.js          24 algorithm problems, 14 categories, 6 users
-│   │   │   ├── seeds/
-│   │   │   │   ├── backend.js   10 backend tasks (HTTP/JSON/parsing helpers)
-│   │   │   │   ├── frontend.js  10 frontend tasks (formatters, trees, UI)
-│   │   │   │   └── sql.js       14 SQL tasks (joins, GROUP BY, window funcs)
-│   │   │   └── routes/
-│   │   │       ├── auth.js          register, login, refresh, /me, Google OAuth
-│   │   │       ├── problems.js      list, detail, favourites (filter by type)
-│   │   │       ├── categories.js
-│   │   │       ├── submissions.js   submit, run, history (real judges)
-│   │   │       └── users.js         profile, dashboard, leaderboard, settings
-│   │   ├── test/                judge + reference-solution tests (npm test)
-│   │   ├── data/                created on first boot (SQLite WAL files)
-│   │   ├── package.json
-│   │   └── .env / .env.example
-│   │
-│   ├── auth-service/  ┐
-│   ├── user-service/  │
-│   ├── task-service/  │
-│   ├── api-gateway/   │  legacy Java/Spring scaffold — boots only with the
-│   ├── ...            │  full Docker compose stack (Postgres + Kafka + Redis
-│   ├── docker-compose.yml │  + Eureka). Builds with `cd Backend && mvn package`.
-│   └── pom.xml        ┘
+├── Backend/                     ← Node + SQLite backend
+│   ├── src/
+│   │   ├── index.js             server bootstrap
+│   │   ├── db.js                SQLite schema + connection + auto-migrations
+│   │   ├── auth.js              JWT + bcrypt helpers, middleware
+│   │   ├── judge.js             real SQL & JS judges (sandboxed, with diff)
+│   │   ├── seed.js              24 algorithm problems, 14 categories
+│   │   ├── seeds/
+│   │   │   ├── backend.js       10 backend tasks (HTTP/JSON/parsing helpers)
+│   │   │   ├── frontend.js      10 frontend tasks (formatters, trees, UI)
+│   │   │   └── sql.js           14 SQL tasks (joins, GROUP BY, window funcs)
+│   │   └── routes/
+│   │       ├── auth.js          register, login, refresh, /me, Google OAuth
+│   │       ├── problems.js      list, detail, favourites (filter by type)
+│   │       ├── categories.js
+│   │       ├── submissions.js   submit, run, history (real judges)
+│   │       └── users.js         profile, dashboard, leaderboard, settings
+│   ├── test/                    judge + reference-solution tests (npm test)
+│   ├── data/                    created on first boot (SQLite WAL files)
+│   ├── Dockerfile
+│   ├── package.json
+│   └── .env / .env.example
 │
 └── Frontend/
-    └── SkillForge-Frontend/
+    └── Frontend/
         ├── app/
         │   ├── root.tsx                     root layout, providers
         │   ├── routes.ts                    route table
@@ -337,85 +298,27 @@ A Playwright-based smoke test was used during development:
 ## 🧹 Resetting the database
 
 ```bash
-cd Backend/server
+cd Backend
 rm -rf data/
 npm start    # auto-seeds again
 ```
 
-## 📝 What was changed in this repo
+## 🛣 Roadmap
 
-**What was broken**
+The project is being evolved into a B2B coding-practice platform for universities
+(see `docs/decisions/` for architectural decisions). Near-term direction:
 
-- Legacy Java microservice scaffold (9 services) couldn't start: requires
-  Postgres with credentials, Kafka, Redis, Eureka, and Docker — none of which
-  were running. Auth-service was crashing with `28P01: password authentication
-  failed for user "postgres"`.
-- Frontend `package.json` was missing 30+ dependencies (`@radix-ui/*`,
-  `lucide-react`, `class-variance-authority`, `tailwind-merge`,
-  `react-resizable-panels`, `recharts`, `sonner`, `vaul`, `cmdk`,
-  `react-hook-form`, `next-themes`, `tw-animate-css`, …).
-- Frontend used `createBrowserRouter` while the build pipeline expected React
-  Router 7 framework mode (`root.tsx` + `routes.ts`) — incompatible.
-- `app/components/ui/sonner.tsx` re-imported itself (`~/components/ui/sonner`),
-  causing a circular import.
-- `app/components/ui/input-otp.tsx` had the same issue.
-- `react-resizable-panels` resolved to a major version with an incompatible API.
-- Existing pages used "LeetCode" branding, were showcases not real pages, and
-  had no API connection or auth.
-
-**What was fixed / built**
-
-- ✅ Brand-new Node.js + Express + SQLite backend at `Backend/server/`
-  (no Docker, boots in seconds).
-- ✅ Full JWT auth: register, login, logout, refresh-token rotation, `/me`,
-  rate-limited.
-- ✅ Working Google OAuth (server-driven flow, links existing users).
-- ✅ Stable APIs for problems, categories, submissions, leaderboard, profile,
-  favourites, dashboard, settings.
-- ✅ Frontend rebrand, React Router 7 framework mode, 13 real pages, auth
-  context, dark/light theme.
-
-**What was added in 1.1 (release)**
-
-- ✅ **Real judges** for SQL and JS (`Backend/server/src/judge.js`):
-  - SQL → fresh `:memory:` SQLite per test, ordered/unordered row diff,
-    blocks `PRAGMA`/`ATTACH`/`DETACH`/`VACUUM`.
-  - JS → Node `vm` sandbox, hard 1 s timeout per call (kills tight infinite
-    loops via V8 interrupts), supports both `function name(){}` and
-    `module.exports.name = …` styles.
-- ✅ **34 new student tasks**:
-  - 10 backend (parse-query-string, build-query-string, paginate, slugify,
-    rate-limit-counter, diff-objects, resolve-redirects, …)
-  - 10 frontend (format-bytes, time-ago, kebab-case, breadcrumbs, filter-tree,
-    paginate-pager, highlight-search, …)
-  - 14 SQL (basic SELECT/WHERE through joins, GROUP BY + HAVING, self-join,
-    second-highest-salary, RANK() and SUM() OVER window functions)
-- ✅ **Schema viewer** in the problem-detail page — for SQL problems we parse
-  the seed DDL/DML and render a per-table preview of columns + first 10 rows.
-- ✅ **Type filter** on the Problems list, plus a coloured pill on each row
-  indicating Algorithm / Backend / Frontend / SQL.
-- ✅ **Per-problem language picker** that only shows languages the judge can
-  actually run (SQL for SQL tasks, JS/TS for backend & frontend tasks, all 5
-  for legacy algorithm tasks).
-- ✅ **Reference-solution test suite** (`npm test` in `Backend/server/`) — 48
-  reference solutions run through the real judge in ~1 second and assert that
-  every shipped problem is solvable with the test cases as defined.
-- ✅ **Java microservice scaffold builds again**: bumped Lombok from the
-  non-existent `1.18.44` to `1.18.30`, added the missing `<version>` to every
-  `<annotationProcessorPaths>`, fixed `auth-service`'s `/me` returning 500
-  instead of 401 on missing `Authorization` header, and made the Mockito
-  surefire run on JDK 23+ via `-Dnet.bytebuddy.experimental=true`.
-
-## 🛣 Possible follow-ups
-
-- WebSocket-based live submission status
-- Discussions / comments per problem
-- Contests with timed leaderboard
-- Email-based password reset
-- More OAuth providers (GitHub, Apple)
-- Replace the heuristic ALGORITHM judge with full sandboxed execution per
-  language (Python, Java, C++) using Docker isolates
+- Modular monolith boundaries (`auth`, `problems`, `submissions`, `users`,
+  `courses`, `assessments`)
+- Migration SQLite → PostgreSQL with versioned migrations
+- Replace `vm`-based JS judge with a real isolated runner (`isolated-vm` /
+  Docker-per-submission)
+- Pluggable auth providers (local + Google + OIDC/Microsoft 365 + LDAP)
+- Roles (`STUDENT` / `INSTRUCTOR` / `ADMIN`), courses, exams, gradebook
+- Plagiarism detection for graded submissions
+- Job-queue-based judge (BullMQ + Redis) for exam-time load
 
 ---
 
-Built with ❤️ as a focused, modern alternative to bloated coding platforms.
+Built as a focused, modern coding-practice platform for real-world skills
+(SQL, backend, frontend) rather than competitive-programming algorithms.

@@ -7,7 +7,7 @@ React 19 + React Router 7 (SPA mode) + Tailwind CSS 4 + shadcn/ui.
 Make sure the backend is running first:
 
 ```bash
-cd ../../Backend/server
+cd ../../Backend
 npm install && npm start         # → http://localhost:4000
 ```
 
