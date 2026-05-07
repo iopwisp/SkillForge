@@ -6,19 +6,22 @@
  *    and compares the result rows to `problem.test_cases_json[*].expected`.
  *
  *  • runJsJudge(problem, code)         — evaluates the user's JavaScript in
- *    Node's `vm` sandbox with a hard timeout, locates the function named
- *    `problem.function_name`, calls it once per test case, and deep-equals
- *    the result against `expected`.
+ *    a fresh `isolated-vm` V8 isolate (NOT Node's `vm` module). Memory and
+ *    per-call wall-clock are hard-bounded by the isolate; arguments and
+ *    return values cross the boundary as structured-cloned copies, never
+ *    references. The isolate has no access to the host's `process`, `fs`,
+ *    `require`, or any host objects we did not explicitly expose.
  *
  * Both return the same shape that the heuristic judge in submissions.js
  * already emits, so the route handler stays small.
  */
 
-import vm from 'node:vm';
+import ivm from 'isolated-vm';
 import Database from 'better-sqlite3';
 
 const DEFAULT_TIME_LIMIT_MS = 2000;
 const PER_CALL_TIMEOUT_MS   = 1000;
+const ISOLATE_MEMORY_MB     = 32;
 
 /* ───────────────────────── helpers ──────────────────────── */
 
@@ -159,6 +162,20 @@ function sortRows(rows) {
  *
  * `equals: 'set'` treats arrays as multisets (order-independent compare).
  * `equals: 'sortedArray'` sorts both arrays before comparing.
+ *
+ * Isolation contract:
+ *   - Every submission runs in a NEW V8 isolate via `isolated-vm`. The
+ *     isolate has its own heap (capped at ISOLATE_MEMORY_MB) and exists
+ *     only for the duration of this call.
+ *   - The host's globals (`process`, `require`, `Buffer`, `fs`, `URL`,
+ *     `setTimeout`, etc.) are NOT exposed. Only V8 builtins (Math, JSON,
+ *     String, Array, Map, Set, Date, RegExp, Promise, ...) are available,
+ *     plus a CommonJS-ish `module.exports` shim and a silent `console`.
+ *   - Arguments cross the boundary via structured clone (`copy: true`),
+ *     so the user code sees independent copies and cannot retain
+ *     references to host objects.
+ *   - Per-call wall-clock is bounded by PER_CALL_TIMEOUT_MS; the
+ *     overall judge run is bounded by `problem.time_limit_ms`.
  */
 export function runJsJudge(problem, code) {
   const tests = safeJson(problem.test_cases_json, []);
@@ -172,104 +189,140 @@ export function runJsJudge(problem, code) {
     return wrongAnswer({ tests, runtimeMs: 1, output: 'Empty submission.' });
   }
 
-  // Build a sandbox that exposes a tiny helper API and captures the user
-  // function via either a `module.exports` or a global declaration.
-  const sandbox = {
-    module: { exports: {} },
-    exports: {},
-    console: { log() {}, error() {}, warn() {}, info() {} },
-    setTimeout, clearTimeout,
-    Buffer,
-    URL, URLSearchParams,
-  };
-  vm.createContext(sandbox);
-
-  const setupCode = `
-    ${code}
-    ;(function () {
-      if (typeof module !== 'undefined' && module.exports && typeof module.exports['${fnName}'] === 'function') {
-        globalThis.__entry = module.exports['${fnName}'];
-        return;
-      }
-      if (typeof module !== 'undefined' && typeof module.exports === 'function') {
-        globalThis.__entry = module.exports;
-        return;
-      }
-      try {
-        if (typeof ${fnName} === 'function') { globalThis.__entry = ${fnName}; return; }
-      } catch (_) {}
-      globalThis.__entry = null;
-    })();
-  `;
-
-  try {
-    vm.runInContext(setupCode, sandbox, { timeout: PER_CALL_TIMEOUT_MS });
-  } catch (e) {
-    return compileError({ tests, error: e.message });
-  }
-  if (typeof sandbox.__entry !== 'function') {
-    return compileError({
-      tests,
-      error: `Could not find a function named \`${fnName}\` in your submission.`,
-    });
-  }
-
-  let passed = 0;
-  let firstFail = null;
   const overall = problem.time_limit_ms || DEFAULT_TIME_LIMIT_MS;
 
-  for (let i = 0; i < tests.length; i++) {
-    const tc = tests[i];
-    const args = Array.isArray(tc.args) ? tc.args : [tc.args];
+  let isolate;
+  let context;
+  try {
+    isolate = new ivm.Isolate({ memoryLimit: ISOLATE_MEMORY_MB });
+    context = isolate.createContextSync();
 
-    sandbox.__args = deepClone(args);
-    let actual;
-    try {
-      actual = vm.runInContext(
-        `__entry.apply(null, __args);`,
-        sandbox,
-        { timeout: PER_CALL_TIMEOUT_MS }
-      );
-    } catch (e) {
-      if (e && e.code === 'ERR_SCRIPT_EXECUTION_TIMEOUT') {
-        return tle({ tests, passed, problem });
-      }
-      if (!firstFail) {
-        firstFail = {
-          index: i, name: tc.name || `Test ${i + 1}`,
-          error: `Runtime error: ${e.message}`,
-          args,
-        };
-      }
-      continue;
-    }
+    // `globalThis` / `global` resolve to the isolate's global object.
+    const jail = context.global;
+    jail.setSync('global', jail.derefInto());
+    jail.setSync('globalThis', jail.derefInto());
 
-    const expected = tc.expected;
-    const ok = compareWithMode(actual, expected, tc.equals);
-    if (ok) {
-      passed++;
-    } else if (!firstFail) {
-      firstFail = {
-        index: i, name: tc.name || `Test ${i + 1}`,
-        args, expected, actual,
+    // Minimal stubs. We deliberately do NOT expose Buffer / URL /
+    // URLSearchParams / setTimeout / fs / process. If a task needs URL
+    // parsing the student implements it from primitives.
+    isolate.compileScriptSync(`
+      var module = { exports: {} };
+      var exports = module.exports;
+      var console = {
+        log: function () {}, warn: function () {}, error: function () {},
+        info: function () {}, debug: function () {}, trace: function () {}
       };
+    `).runSync(context);
+
+    // Run the user code, then locate the entry function — accepting either
+    // a top-level `function fnName(){}`, a `module.exports.fnName = ...`,
+    // or `module.exports = function(){}` style.
+    const userSource = `
+      ${code}
+      ;(function () {
+        if (typeof module !== 'undefined' && module && typeof module.exports === 'object'
+            && module.exports && typeof module.exports[${JSON.stringify(fnName)}] === 'function') {
+          globalThis.__entry = module.exports[${JSON.stringify(fnName)}];
+          return;
+        }
+        if (typeof module !== 'undefined' && module && typeof module.exports === 'function') {
+          globalThis.__entry = module.exports;
+          return;
+        }
+        try {
+          if (typeof ${fnName} === 'function') { globalThis.__entry = ${fnName}; return; }
+        } catch (_) {}
+        globalThis.__entry = null;
+      })();
+    `;
+
+    let userScript;
+    try {
+      userScript = isolate.compileScriptSync(userSource);
+    } catch (e) {
+      return compileError({ tests, error: e.message });
+    }
+    try {
+      userScript.runSync(context, { timeout: PER_CALL_TIMEOUT_MS });
+    } catch (e) {
+      if (isTimeoutError(e)) return tle({ tests, passed: 0, problem });
+      return compileError({ tests, error: e.message });
     }
 
-    if (Date.now() - t0 > overall) {
-      return tle({ tests, passed, problem });
+    const entryRef = jail.getSync('__entry', { reference: true });
+    if (!entryRef || entryRef.typeof !== 'function') {
+      if (entryRef) entryRef.release();
+      return compileError({
+        tests,
+        error: `Could not find a function named \`${fnName}\` in your submission.`,
+      });
+    }
+
+    let passed = 0;
+    let firstFail = null;
+
+    try {
+      for (let i = 0; i < tests.length; i++) {
+        const tc = tests[i];
+        const args = Array.isArray(tc.args) ? tc.args : [tc.args];
+
+        let actual;
+        try {
+          actual = entryRef.applySync(undefined, args, {
+            timeout: PER_CALL_TIMEOUT_MS,
+            arguments: { copy: true },
+            result: { copy: true },
+          });
+        } catch (e) {
+          if (isTimeoutError(e)) {
+            return tle({ tests, passed, problem });
+          }
+          if (!firstFail) {
+            firstFail = {
+              index: i, name: tc.name || `Test ${i + 1}`,
+              error: `Runtime error: ${e.message}`,
+              args,
+            };
+          }
+          continue;
+        }
+
+        const expected = tc.expected;
+        const ok = compareWithMode(actual, expected, tc.equals);
+        if (ok) {
+          passed++;
+        } else if (!firstFail) {
+          firstFail = {
+            index: i, name: tc.name || `Test ${i + 1}`,
+            args, expected, actual,
+          };
+        }
+
+        if (Date.now() - t0 > overall) {
+          return tle({ tests, passed, problem });
+        }
+      }
+    } finally {
+      entryRef.release();
+    }
+
+    return finishVerdict({ tests, passed, firstFail, t0 });
+  } catch (e) {
+    return runtimeError({ tests, error: `Judge error: ${e.message}` });
+  } finally {
+    if (context) context.release();
+    if (isolate) {
+      try { isolate.dispose(); } catch (_) { /* already disposed */ }
     }
   }
-
-  return finishVerdict({ tests, passed, firstFail, t0 });
 }
 
-function deepClone(v) {
-  if (v === null) return null;
-  if (typeof v !== 'object') return v;
-  if (Array.isArray(v)) return v.map(deepClone);
-  const out = {};
-  for (const k of Object.keys(v)) out[k] = deepClone(v[k]);
-  return out;
+function isTimeoutError(e) {
+  if (!e) return false;
+  const msg = (e.message || '').toLowerCase();
+  return msg.includes('script execution timed out')
+      || msg.includes('execution timed out')
+      || e.code === 'ERR_SCRIPT_EXECUTION_TIMEOUT';
 }
 
 function compareWithMode(actual, expected, mode) {

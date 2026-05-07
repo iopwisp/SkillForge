@@ -1,7 +1,9 @@
 # 0004 — Replace Node `vm` with an isolated runner for the JS judge
 
-- **Status:** accepted (implementation pending)
+- **Status:** accepted (Phase A implemented — isolated-vm)
 - **Date:** 2026-05-07
+- **Implemented:** 2026-05-07 (`isolated-vm` runner shipped; Docker-runner
+  for graded exams remains pending in Phase 2)
 
 ## Context
 
@@ -52,10 +54,14 @@ Replace `vm` with a real isolation boundary. Two viable options:
 
 ### Plan
 
-1. **Phase 0 (immediate):** Replace `vm` with `isolated-vm`. This kills
-   the easy escapes and is sufficient for non-graded "Run" actions and
-   for the AITU pilot's first courses. Memory and time limits are
-   enforced by the library.
+1. **Phase 0 (DONE):** Replace `vm` with `isolated-vm`. Each submission
+   gets a fresh V8 isolate (32 MB heap cap, per-call wall-clock 1 s),
+   arguments cross the boundary as structured-clone copies, no host
+   globals are exposed. Verified by the `test/judge-isolation.test.mjs`
+   suite covering: `this.constructor.constructor('return process')()`
+   escape, `require('fs')`, `Buffer`, `globalThis.process.env`,
+   tight infinite loop (TLE), memory bomb, dynamic `import()`,
+   and isolate-disposal under load (50 sequential submissions).
 2. **Phase 2 (before first graded exam):** Add a `Docker` runner mode for
    graded submissions. Configurable per deployment (`JUDGE_RUNTIME=isolated-vm`
    or `JUDGE_RUNTIME=docker`). Default to `docker` once available.

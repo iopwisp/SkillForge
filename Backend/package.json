@@ -9,7 +9,7 @@
     "dev": "node --watch src/index.js",
     "seed": "node src/shared/seed/index.js",
     "lint": "eslint .",
-    "test": "node test/judge.test.mjs && node test/seed-backend.test.mjs && node test/seed-frontend.test.mjs && node test/seed-sql.test.mjs"
+    "test": "node test/judge.test.mjs && node test/judge-isolation.test.mjs && node test/seed-backend.test.mjs && node test/seed-frontend.test.mjs && node test/seed-sql.test.mjs"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -19,6 +19,7 @@
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "express-rate-limit": "^7.5.0",
+    "isolated-vm": "^6.1.2",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
     "zod": "^3.24.1"
