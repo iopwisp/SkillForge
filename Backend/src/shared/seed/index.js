@@ -5,10 +5,12 @@
  * Run: `npm run seed`  (or it auto-runs on first server start).
  */
 import 'dotenv/config';
-import { db } from './db.js';
-import { BACKEND_PROBLEMS } from './seeds/backend.js';
-import { FRONTEND_PROBLEMS } from './seeds/frontend.js';
-import { SQL_PROBLEMS } from './seeds/sql.js';
+import { fileURLToPath } from 'node:url';
+
+import { db } from '../db.js';
+import { BACKEND_PROBLEMS } from './backend.js';
+import { FRONTEND_PROBLEMS } from './frontend.js';
+import { SQL_PROBLEMS } from './sql.js';
 
 const CATEGORIES = [
   { slug: 'arrays', name: 'Arrays & Hashing', description: 'Master array manipulation and hash maps', icon: 'Layers', color: 'indigo' },
@@ -470,6 +472,7 @@ export function removeSeededUsers() {
   return rows.length;
 }
 
-if (process.argv[1] && process.argv[1].endsWith('seed.js')) {
+// Allow running as a CLI: `node src/shared/seed/index.js`
+if (process.argv[1] && process.argv[1] === fileURLToPath(import.meta.url)) {
   runSeed();
 }

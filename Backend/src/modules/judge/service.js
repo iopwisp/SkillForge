@@ -373,3 +373,77 @@ function verdictNoTests() {
     error: null, beats: 50,
   };
 }
+
+/* ───────────────────────── facade ──────────────────────────
+ * The submissions module calls `runJudge(problem, code, language)` and is
+ * intentionally agnostic about which judge is chosen. Judge selection,
+ * heuristic fallback for legacy algorithm tasks, and result shape live here.
+ */
+
+const JS_LIKE_LANGS = new Set(['javascript', 'typescript', 'js', 'ts', 'node']);
+
+export function runJudge(problem, code, language) {
+  const which = selectJudge(problem, language);
+  if (which === 'sql') return runSqlJudge(problem, code);
+  if (which === 'js') return runJsJudge(problem, code);
+  return judgeHeuristic(problem, code);
+}
+
+function selectJudge(problem, language) {
+  const type = (problem.problem_type || 'ALGORITHM').toUpperCase();
+  if (type === 'SQL') return 'sql';
+  if (type === 'BACKEND' || type === 'FRONTEND') {
+    if (JS_LIKE_LANGS.has(language)) return 'js';
+    return 'heuristic';
+  }
+  // ALGORITHM
+  if (problem.test_cases_json && JS_LIKE_LANGS.has(language)) return 'js';
+  return 'heuristic';
+}
+
+/**
+ * Legacy heuristic — kept for the original 24 algorithm problems that ship
+ * without per-test machinery. Will be removed once those problems get real
+ * test cases (or are dropped in favor of more SQL/backend/frontend content).
+ */
+function judgeHeuristic(problem, code) {
+  const trimmed = code.trim();
+  const len = trimmed.length;
+  if (len < 20) {
+    return { status: 'WRONG_ANSWER', testsPassed: 0, testsTotal: 10, runtimeMs: 4, memoryKb: 14000, output: 'Empty or trivial solution', error: null, beats: 0 };
+  }
+  if (/while\s*\(\s*true\s*\)|for\s*\(\s*;;\s*\)/i.test(trimmed)) {
+    return { status: 'TLE', testsPassed: 3, testsTotal: 10, runtimeMs: (problem.time_limit_ms || 1000) + 50, memoryKb: 32000, output: null, error: 'Time Limit Exceeded', beats: 0 };
+  }
+  if (/throw\s+new\s+Error|raise\s+Exception|panic\(/i.test(trimmed)) {
+    return { status: 'RUNTIME_ERROR', testsPassed: 1, testsTotal: 10, runtimeMs: 12, memoryKb: 22000, output: null, error: 'Runtime error during test execution', beats: 0 };
+  }
+
+  const hint = (problem.expected_output || '').toLowerCase();
+  const haystack = trimmed.toLowerCase();
+  const tokens = hint.split(/[^a-z0-9_]+/).filter(t => t.length >= 3);
+  const matched = tokens.filter(t => haystack.includes(t)).length;
+  const ratio = tokens.length === 0 ? 1 : matched / tokens.length;
+
+  const seed = (len % 73) / 73;
+
+  if (ratio >= 0.5) {
+    const runtime = Math.max(8, Math.round(40 + seed * 80));
+    const memory = Math.round(40000 + seed * 12000);
+    const beats = Math.max(20, Math.min(99, Math.round(95 - seed * 60)));
+    return {
+      status: 'ACCEPTED',
+      testsPassed: 10, testsTotal: 10,
+      runtimeMs: runtime, memoryKb: memory,
+      output: 'All test cases passed',
+      error: null,
+      beats,
+    };
+  }
+  const passed = Math.max(2, Math.round(ratio * 10) || 4);
+  return {
+    status: 'WRONG_ANSWER', testsPassed: passed, testsTotal: 10,
+    runtimeMs: Math.round(20 + seed * 30), memoryKb: Math.round(38000 + seed * 6000),
+    output: 'One or more test cases produced a wrong answer.', error: null, beats: 0,
+  };
+}

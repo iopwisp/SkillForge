@@ -1,8 +1,8 @@
 /**
  * Validate frontend problems with reference solutions.
  */
-import { runJsJudge } from '../src/judge.js';
-import { FRONTEND_PROBLEMS } from '../src/seeds/frontend.js';
+import { runJsJudge } from '../src/modules/judge/service.js';
+import { FRONTEND_PROBLEMS } from '../src/shared/seed/frontend.js';
 
 const REF = {
   'format-bytes': `

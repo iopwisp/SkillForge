@@ -1,19 +1,25 @@
+/**
+ * Application bootstrap.
+ *
+ * Composes the express app from the modules under `src/modules/*` and the
+ * cross-cutting concerns under `src/shared/*`. Per ADR 0003 this is the
+ * only place where module routers are wired together.
+ */
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
-import { fileURLToPath } from 'node:url';
-import path from 'node:path';
 
-import { db } from './db.js';
-import authRoutes from './routes/auth.js';
-import problemsRoutes from './routes/problems.js';
-import categoriesRoutes from './routes/categories.js';
-import submissionsRoutes from './routes/submissions.js';
-import usersRoutes from './routes/users.js';
-import { removeSeededUsers, runSeed } from './seed.js';
+import { db } from './shared/db.js';
+import { removeSeededUsers, runSeed } from './shared/seed/index.js';
+
+import authRoutes from './modules/auth/routes.js';
+import categoriesRoutes from './modules/categories/routes.js';
+import problemsRoutes from './modules/problems/routes.js';
+import submissionsRoutes from './modules/submissions/routes.js';
+import usersRoutes from './modules/users/routes.js';
 
 const app = express();
 
@@ -64,9 +70,13 @@ app.use('/api/users', usersRoutes);
 
 // ─── Error handler ──────────────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
-  console.error(err);
+  // HttpError instances carry an explicit status; everything else is 500.
+  const status = err.status || err.statusCode || 500;
+  if (status >= 500) console.error(err);
   if (res.headersSent) return;
-  res.status(err.status || 500).json({ error: err.message || 'Internal Server Error' });
+  const body = { error: err.message || 'Internal Server Error' };
+  if (err.details !== undefined) body.details = err.details;
+  res.status(status).json(body);
 });
 
 app.use((_req, res) => res.status(404).json({ error: 'Not found' }));

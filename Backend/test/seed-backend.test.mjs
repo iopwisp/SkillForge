@@ -3,8 +3,8 @@
  * through the real judge to make sure each problem is actually solvable
  * with the test cases as defined.
  */
-import { runJsJudge, runSqlJudge } from '../src/judge.js';
-import { BACKEND_PROBLEMS } from '../src/seeds/backend.js';
+import { runJsJudge } from '../src/modules/judge/service.js';
+import { BACKEND_PROBLEMS } from '../src/shared/seed/backend.js';
 
 const REFERENCE_SOLUTIONS = {
   'parse-query-string': `

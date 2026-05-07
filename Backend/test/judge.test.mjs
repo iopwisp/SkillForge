@@ -1,5 +1,5 @@
 // Quick smoke test for the judge — not part of the production build.
-import { runSqlJudge, runJsJudge } from '../src/judge.js';
+import { runSqlJudge, runJsJudge } from '../src/modules/judge/service.js';
 
 let pass = 0, fail = 0;
 function expect(name, cond, extra = '') {

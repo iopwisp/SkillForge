@@ -1,8 +1,8 @@
 /**
  * Validate SQL problems with reference solutions.
  */
-import { runSqlJudge } from '../src/judge.js';
-import { SQL_PROBLEMS } from '../src/seeds/sql.js';
+import { runSqlJudge } from '../src/modules/judge/service.js';
+import { SQL_PROBLEMS } from '../src/shared/seed/sql.js';
 
 const REF = {
   'sql-select-all-customers':
