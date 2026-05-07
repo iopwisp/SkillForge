@@ -2,7 +2,7 @@
 
 > Quick-start context for AI coding sessions on the SkillForge codebase.
 > Read this BEFORE doing anything else when continuing work after a break.
-> Last updated: 2026-05-07 (after Phase 0 step #4: pluggable auth).
+> Last updated: 2026-05-07 (after Phase 0 step #5: structured logging).
 
 ---
 
@@ -101,7 +101,7 @@ If you make another big call, write a new ADR (`docs/decisions/000N-*.md`).
 
 ## 5. What was done in Phase 0 so far
 
-Five commits, in order:
+Six commits, in order:
 
 1. `32f6dd3 chore(phase-0): foundation cleanup and B2B direction setup`
    - Removed Java/Spring scaffold (~14k LOC) — 9 microservices + Maven
@@ -129,7 +129,7 @@ Five commits, in order:
    - Multi-stage Dockerfile so native modules build in a stage with toolchain
      and the runtime image stays slim.
 4. `c423e3b chore: add AGENTS.md for cross-session context` — this file.
-5. `<next> feat(phase-0): pluggable auth provider abstraction`
+5. `21d305b feat(phase-0): pluggable auth provider abstraction`
    - `modules/auth/providers/{local,google,index}.js` — provider plugins.
    - `modules/auth/service.js` is now a thin facade; JWT / refresh /
      password-change logic stays here, "how to authenticate" lives in
@@ -141,6 +141,22 @@ Five commits, in order:
      happy/duplicate paths, login happy/wrong-pw/unknown-user (with no
      enumeration), refresh rotation + double-use rejection, registry,
      provider capability flags, google `enabled()` reflects env.
+6. `<next> feat(phase-0): structured logging + request-id + Sentry hook`
+   - `shared/logger.js` (pino: JSON in prod, pino-pretty in dev,
+     warn-only in tests; redacts password / accessToken / refreshToken /
+     authorization / cookie / client_secret).
+   - `shared/middleware/request-id.js` (`X-Request-Id` round-trip; uses
+     incoming header if sane, else generates a UUID; echoes back; sets
+     `req.id`).
+   - `shared/sentry.js` (`@sentry/node`, no-op unless `SENTRY_DSN` is
+     set; Glitchtip-compatible for on-prem error tracking).
+   - `pino-http` replaces `morgan('dev')`; `req.log` is a child logger
+     with `reqId` baked in. Health checks no longer spam logs. 4xx
+     log at warn, 5xx at error and forward to Sentry.
+   - All `console.log/warn/error` in `src/` migrated to the logger
+     (auth providers + seed runner).
+   - New env: `LOG_LEVEL`, `SENTRY_DSN`, `SENTRY_RELEASE`,
+     `SENTRY_TRACES_SAMPLE_RATE`.
 
 ---
 
@@ -149,14 +165,12 @@ Five commits, in order:
 | # | Task | Effort | Notes |
 |---|---|---|---|
 | ~~4~~ | ~~Pluggable auth providers~~ | done | ADR 0005 shipped. |
-| 5 | Pino structured logging + request-id middleware + Sentry/Glitchtip | 1 day | Without this debugging on-prem incidents will be impossible. |
+| ~~5~~ | ~~Pino logging + request-id + Sentry hook~~ | done | pino + pino-http + Glitchtip-compatible Sentry SDK. |
 | 6 | Migrate SQLite → PostgreSQL (ADR 0002), versioned migrations | 3–5 days | Biggest chunk left. Decide between Kysely / Drizzle / raw `pg` during a small spike. CI must run against a real Postgres container. |
 | 7 | `docker-compose.yml` (Postgres + Backend) + `pg_dump` backup script | 0.5 day | Comes with the Postgres migration. |
 | 8 | Integration tests for auth + submissions (supertest) | 1–2 days | Coverage proof for security review. |
 
-Suggested order: 5 → 6 → 7 → 8. Rationale:
-- Logging/error tracking should be in place BEFORE the Postgres migration
-  (which will surface lots of noise that needs to be observable).
+Suggested order: 6 → 7 → 8. Rationale:
 - Postgres is the longest single change; keep it last in the foundation.
 - Compose + backup naturally chain off the Postgres work.
 - Integration tests close the loop on the new shape.
@@ -265,39 +279,56 @@ on the first ACCEPTED EASY problem.
 
 ## 11. Where we are right now
 
-Phase 0 steps #1 (cleanup), #2 (modules), #3 (isolated-vm) and #4
-(pluggable auth) are all done. The most recent feature commit is the
-pluggable-auth one (look at `git log` for the SHA).
+Phase 0 steps #1–#5 are all done. The most recent feature commit is
+the structured-logging one — look at `git log` for the SHA.
 
-**Next concrete action when you next start:** Phase 0 step #5 —
-structured logging + request-id + error tracking. Plan:
+**Next concrete action when you next start:** Phase 0 step #6 —
+SQLite → PostgreSQL migration with versioned migrations (ADR 0002).
+This is the largest single change in Phase 0; budget 3–5 days.
 
-1. `npm install pino pino-pretty` (pretty for dev only).
-2. Create `shared/logger.js` exporting a configured pino instance:
-    - JSON output in production, pretty in dev (`NODE_ENV` switch).
-    - Default level from `LOG_LEVEL` env (`info` in prod, `debug` in dev).
-    - Redact obvious secrets (`password`, `accessToken`, `refreshToken`,
-      `Authorization` header) via pino's `redact` config.
-3. Create `shared/middleware/request-id.js`: reads `X-Request-Id`
-   header, otherwise generates one (`crypto.randomUUID()`), attaches
-   it to `req.id`, echoes it back in `X-Request-Id` response header,
-   and creates a child logger on `req.log` with `{ reqId }` baked in.
-4. Replace `morgan('dev')` in `index.js` with a `pino-http`-style
-   per-request log line that uses the request's child logger.
-5. Update the global error handler in `index.js` to use `req.log` and
-   include the request id in error logs.
-6. Pick error tracking: **Sentry-compatible Glitchtip** (open source,
-   self-hostable; AITU on-prem can run it next to the app). Add an
-   optional `SENTRY_DSN` env — if set, `@sentry/node` initializes;
-   if not, no-op.
-7. Add `LOG_LEVEL` and `SENTRY_DSN` to `.env.example`.
-8. Refactor any `console.log` / `console.error` in modules to use the
-   logger (or `req.log` in routes/services that have it).
-9. Verify: lint + tests + smoke-start + a `curl -H "X-Request-Id: abc"`
-   shows the same id in the response and in the server logs.
-10. Commit: `feat(phase-0): structured logging + request-id + Sentry/Glitchtip hook`.
+Plan:
 
-After that, step #6 (Postgres migration) is the next big chunk.
+1. **Spike (half day):** evaluate query-builder choices.
+    - **Kysely** — type-safe SQL builder, no model layer. Aligns
+      with our "no enterprise slojka" rule. Leading candidate.
+    - **Drizzle** — type-safe + has its own migrator built in.
+    - **raw `pg`** — minimal, full SQL control, pair with a tiny
+      hand-rolled migration runner.
+   Pick the one that lets us write SQL close to what we already have
+   in `queries.js` files, without an ORM-style mental model.
+2. Create `Backend/db/migrations/0001_initial.sql`:
+    - Translate the current schema in `shared/db.js` literally
+      into Postgres dialect.
+    - Drop the runtime `ensureColumn(...)` calls in `shared/db.js`.
+3. Build `shared/migrations.js`:
+    - Numeric-prefix files in `db/migrations/`.
+    - One `schema_migrations(version, applied_at)` table tracks
+      what's been applied.
+    - Forward-only, applied at boot before the seed runs.
+4. Replace `better-sqlite3` with `pg` (or chosen client). Update
+   `shared/db.js` to export the new client; update each
+   `modules/*/queries.js` to use it.
+    - Most queries are direct SQL with `$1, $2` parameter placeholders;
+      `?` → `$N` is mostly mechanical but watch for the `WHERE id IN (?)`
+      patterns and `ON CONFLICT` differences.
+    - `db.transaction(fn)` (better-sqlite3) → `pg`'s manual `BEGIN/COMMIT`
+      via a connection helper.
+5. Update tests:
+    - CI must spin up a Postgres container before `npm test`.
+    - `auth-providers.test.mjs` already opens its own DB — switch to
+      a Postgres test database (`DATABASE_URL=...`).
+6. Update `Dockerfile` (likely just env vars; the build stage has
+   `pg` client libs already via npm).
+7. Add `DATABASE_URL` to `.env.example` and remove `DATABASE_FILE`.
+8. Update `docs/decisions/0002-postgres-versioned-migrations.md`
+   status to `accepted (implemented)` and pin the chosen client.
+9. Verify: lint + tests + smoke-start + live HTTP submit (the
+   submissions transaction must still work atomically against
+   Postgres).
+10. Commit: `feat(phase-0): migrate SQLite -> PostgreSQL with versioned migrations`.
+
+After that, step #7 (docker-compose with Postgres) is a 0.5-day
+chaser, then step #8 (supertest integration tests) closes Phase 0.
 
 ---
 

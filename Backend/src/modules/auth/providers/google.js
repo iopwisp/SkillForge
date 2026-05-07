@@ -29,6 +29,7 @@
 import crypto from 'node:crypto';
 
 import { HttpError } from '../../../shared/errors.js';
+import { logger } from '../../../shared/logger.js';
 import * as q from '../queries.js';
 
 const DEFAULT_REDIRECT_URI = 'http://localhost:4000/api/auth/google/callback';
@@ -81,7 +82,7 @@ export const googleProvider = {
       const user = await loginOrCreateWithGoogle(String(code));
       return { user, frontend };
     } catch (e) {
-      console.error('Google OAuth failed:', e);
+      logger.error({ err: e }, 'Google OAuth callback failed');
       return { error: 'oauth_failed', frontend };
     }
   },
@@ -91,7 +92,7 @@ export const googleProvider = {
     try {
       return await loginOrCreateWithGoogle(code);
     } catch (e) {
-      console.error('Google OAuth failed:', e);
+      logger.error({ err: e }, 'Google OAuth code exchange failed');
       throw new HttpError(400, 'OAuth exchange failed');
     }
   },

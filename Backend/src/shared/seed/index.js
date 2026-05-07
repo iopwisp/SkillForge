@@ -8,6 +8,7 @@ import 'dotenv/config';
 import { fileURLToPath } from 'node:url';
 
 import { db } from '../db.js';
+import { logger } from '../logger.js';
 import { BACKEND_PROBLEMS } from './backend.js';
 import { FRONTEND_PROBLEMS } from './frontend.js';
 import { SQL_PROBLEMS } from './sql.js';
@@ -436,9 +437,20 @@ export function runSeed() {
 
   syncProblemSubmissionStats();
 
-  console.log(`✅ Seed complete in ${Date.now() - t0}ms`);
-  console.log(`   ${CATEGORIES.length} categories, ${ALL_PROBLEMS.length} problems`);
-  console.log(`   ALGORITHM=${PROBLEMS.length}  BACKEND=${BACKEND_PROBLEMS.length}  FRONTEND=${FRONTEND_PROBLEMS.length}  SQL=${SQL_PROBLEMS.length}`);
+  logger.info(
+    {
+      durationMs: Date.now() - t0,
+      categories: CATEGORIES.length,
+      problems: ALL_PROBLEMS.length,
+      breakdown: {
+        algorithm: PROBLEMS.length,
+        backend: BACKEND_PROBLEMS.length,
+        frontend: FRONTEND_PROBLEMS.length,
+        sql: SQL_PROBLEMS.length,
+      },
+    },
+    'Seed complete',
+  );
 }
 
 export function syncProblemSubmissionStats() {

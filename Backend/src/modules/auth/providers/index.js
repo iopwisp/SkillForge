@@ -15,6 +15,7 @@
  * setting AUTH_PROVIDERS=local (or local,microsoft, etc.).
  */
 import { HttpError } from '../../../shared/errors.js';
+import { logger } from '../../../shared/logger.js';
 import { googleProvider } from './google.js';
 import { localProvider } from './local.js';
 
@@ -32,11 +33,11 @@ const REGISTERED = (process.env.AUTH_PROVIDERS || 'local,google')
 // a noisy warning so misconfiguration is obvious in logs.
 for (const name of REGISTERED) {
   if (!ALL_PROVIDERS[name]) {
-    console.warn(`[auth] AUTH_PROVIDERS lists unknown provider "${name}" — ignoring`);
+    logger.warn({ provider: name }, 'AUTH_PROVIDERS lists unknown provider — ignoring');
   }
 }
 if (!REGISTERED.includes('local')) {
-  console.warn('[auth] AUTH_PROVIDERS does not include "local"; password login disabled');
+  logger.warn('AUTH_PROVIDERS does not include "local"; password login disabled');
 }
 
 /** Lookup by name; returns null if not registered or unknown. */
