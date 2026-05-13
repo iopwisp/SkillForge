@@ -3,12 +3,20 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "~/lib/auth";
-import { ApiError } from "~/lib/api";
+import { api, ApiError } from "~/lib/api";
 import { Input } from "~/components/ui/input";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
 import { GoogleButton } from "~/components/common/GoogleButton";
+import { MicrosoftButton } from "~/components/common/MicrosoftButton";
 import { AuthLayout } from "./login";
+
+interface AuthProvider {
+  name: string;
+  type: string;
+  enabled: boolean;
+  supportsOAuthRedirect?: boolean;
+}
 
 export default function RegisterPage() {
   const { user, register } = useAuth();
@@ -16,8 +24,15 @@ export default function RegisterPage() {
   const [showPwd, setShowPwd] = useState(false);
   const [form, setForm] = useState({ username: "", email: "", password: "", fullName: "" });
   const [submitting, setSubmitting] = useState(false);
+  const [providers, setProviders] = useState<AuthProvider[]>([]);
 
   useEffect(() => { if (user) navigate("/dashboard", { replace: true }); }, [user, navigate]);
+
+  useEffect(() => {
+    api<AuthProvider[]>("/auth/providers", { auth: false })
+      .then(setProviders)
+      .catch(() => {});
+  }, []);
 
   function update<K extends keyof typeof form>(k: K, v: string) {
     setForm(s => ({ ...s, [k]: v }));
@@ -104,7 +119,12 @@ export default function RegisterPage() {
         <span className="flex-1 h-px bg-border" /><span>or</span><span className="flex-1 h-px bg-border" />
       </div>
 
-      <GoogleButton>Sign up with Google</GoogleButton>
+      {providers.some(p => p.name === "google" && p.enabled) && (
+        <GoogleButton>Sign up with Google</GoogleButton>
+      )}
+      {providers.some(p => p.name === "microsoft" && p.enabled) && (
+        <MicrosoftButton className="mt-3">Sign up with Microsoft</MicrosoftButton>
+      )}
 
       <p className="mt-6 text-sm text-muted-foreground text-center">
         Already on SkillForge? <Link to="/login" className="text-primary font-medium">Sign in</Link>

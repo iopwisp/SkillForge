@@ -420,4 +420,231 @@ If you encounter a **loop**, return \`null\` instead of looping forever.`,
       { args: [{ '/a': '/b', '/b': '/c', '/c': '/a' }, '/a'],   expected: null },
     ],
   },
+
+  {
+    slug: 'public-user-profile',
+    title: 'Public User Profile',
+    difficulty: 'EASY',
+    category: 'backend',
+    tags: 'api,security,objects',
+    description:
+`Backend APIs often need to return a safe public view of a user record.
+Implement \`publicUser(user)\` that returns only:
+
+* \`id\`
+* \`username\`
+* \`fullName\`
+* \`avatarUrl\`
+
+If \`fullName\` or \`avatarUrl\` is missing, return \`null\` for that field.
+Never include private fields such as \`email\`, \`passwordHash\`, tokens, or role.`,
+    examples: [
+      { input: '{ id: 7, username: "alice", email: "a@example.com" }', output: '{ id: 7, username: "alice", fullName: null, avatarUrl: null }' },
+    ],
+    constraints: '• user is a plain object\n• id and username are always present',
+    hints: ['Build a new object instead of deleting fields from the input.', 'Use nullish coalescing for optional fields.'],
+    starterCode: {
+      javascript:
+`function publicUser(user) {
+  // your code here
+}
+`,
+      typescript:
+`function publicUser(user: Record<string, any>): {
+  id: number; username: string; fullName: string | null; avatarUrl: string | null;
+} {
+  return { id: 0, username: '', fullName: null, avatarUrl: null };
+}
+`,
+      python:
+`def publicUser(user):
+    return {
+        "id": user.get("id"),
+        "username": user.get("username"),
+        "fullName": user.get("fullName"),
+        "avatarUrl": user.get("avatarUrl"),
+    }
+`,
+      java:
+`import java.util.*;
+
+class Solution {
+    public Map<String, Object> publicUser(Map<String, Object> user) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("id", user.get("id"));
+        out.put("username", user.get("username"));
+        out.put("fullName", user.getOrDefault("fullName", null));
+        out.put("avatarUrl", user.getOrDefault("avatarUrl", null));
+        return out;
+    }
+}
+`,
+      go:
+`package main
+
+func publicUser(user map[string]any) map[string]any {
+    fullName, ok := user["fullName"]
+    if !ok {
+        fullName = nil
+    }
+    avatarURL, ok := user["avatarUrl"]
+    if !ok {
+        avatarURL = nil
+    }
+    return map[string]any{
+        "id": user["id"],
+        "username": user["username"],
+        "fullName": fullName,
+        "avatarUrl": avatarURL,
+    }
+}
+`,
+    },
+    functionName: 'publicUser',
+    testCases: [
+      { args: [{ id: 1, username: 'demo', email: 'demo@example.com', passwordHash: 'secret', role: 'ADMIN' }],
+        expected: { id: 1, username: 'demo', fullName: null, avatarUrl: null } },
+      { args: [{ id: 2, username: 'alice', fullName: 'Alice A.', avatarUrl: '/a.png', accessToken: 'tok' }],
+        expected: { id: 2, username: 'alice', fullName: 'Alice A.', avatarUrl: '/a.png' } },
+      { args: [{ id: 3, username: 'bob', fullName: '', avatarUrl: undefined }],
+        expected: { id: 3, username: 'bob', fullName: '', avatarUrl: null } },
+      { args: [{ id: 4, username: 'carol', fullName: null, avatarUrl: null, refreshToken: 'hidden' }],
+        expected: { id: 4, username: 'carol', fullName: null, avatarUrl: null } },
+    ],
+  },
+
+  {
+    slug: 'normalize-pagination-query',
+    title: 'Normalize Pagination Query',
+    difficulty: 'MEDIUM',
+    category: 'backend',
+    tags: 'api,pagination,validation',
+    description:
+`Implement \`normalizePagination(query)\` for REST endpoints that receive
+\`page\` and \`pageSize\` from a query string.
+
+Return:
+
+\`\`\`
+{ page, pageSize, offset }
+\`\`\`
+
+Rules:
+
+* \`page\` defaults to \`1\`.
+* \`pageSize\` defaults to \`20\`.
+* Non-numeric, fractional, or negative values fall back to the default.
+* \`pageSize\` is clamped to at most \`100\`.
+* \`offset = (page - 1) * pageSize\`.`,
+    examples: [
+      { input: '{ page: "3", pageSize: "25" }', output: '{ page: 3, pageSize: 25, offset: 50 }' },
+      { input: '{ page: "-1", pageSize: "999" }', output: '{ page: 1, pageSize: 100, offset: 0 }' },
+    ],
+    constraints: '• query is a plain object with optional string/number values',
+    hints: ['Use Number.parseInt, then verify String(value) really represents an integer.', 'Clamp after applying defaults.'],
+    starterCode: {
+      javascript:
+`function normalizePagination(query) {
+  // your code here
+}
+`,
+      typescript:
+`function normalizePagination(query: Record<string, unknown>): {
+  page: number; pageSize: number; offset: number;
+} {
+  return { page: 1, pageSize: 20, offset: 0 };
+}
+`,
+      python:
+`def normalizePagination(query):
+    def int_value(value, default):
+        if value is None:
+            return default
+        s = str(value).strip()
+        if not s.isdigit():
+            return default
+        n = int(s)
+        return n if n > 0 else default
+
+    page = int_value(query.get("page"), 1)
+    page_size = min(100, int_value(query.get("pageSize"), 20))
+    return {"page": page, "pageSize": page_size, "offset": (page - 1) * page_size}
+`,
+      java:
+`import java.util.*;
+
+class Solution {
+    public Map<String, Object> normalizePagination(Map<String, Object> query) {
+        int page = intValue(query.get("page"), 1);
+        int pageSize = Math.min(100, intValue(query.get("pageSize"), 20));
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("page", page);
+        out.put("pageSize", pageSize);
+        out.put("offset", (page - 1) * pageSize);
+        return out;
+    }
+
+    private int intValue(Object value, int fallback) {
+        if (value == null) return fallback;
+        String s = String.valueOf(value).trim();
+        if (!s.matches("\\\\d+")) return fallback;
+        int n = Integer.parseInt(s);
+        return n > 0 ? n : fallback;
+    }
+}
+`,
+      go:
+`package main
+
+import (
+    "strconv"
+    "strings"
+)
+
+func normalizePagination(query map[string]any) map[string]any {
+    page := intValue(query["page"], 1)
+    pageSize := intValue(query["pageSize"], 20)
+    if pageSize > 100 {
+        pageSize = 100
+    }
+    return map[string]any{"page": page, "pageSize": pageSize, "offset": (page - 1) * pageSize}
+}
+
+func intValue(value any, fallback int) int {
+    if value == nil {
+        return fallback
+    }
+    s := strings.TrimSpace(strings.TrimSuffix(strings.TrimSuffix(fmtValue(value), ".0"), ".00"))
+    n, err := strconv.Atoi(s)
+    if err != nil || n <= 0 {
+        return fallback
+    }
+    return n
+}
+
+func fmtValue(value any) string {
+    switch v := value.(type) {
+    case string:
+        return v
+    case int:
+        return strconv.Itoa(v)
+    case float64:
+        return strconv.FormatFloat(v, 'f', -1, 64)
+    default:
+        return ""
+    }
+}
+`,
+    },
+    functionName: 'normalizePagination',
+    testCases: [
+      { args: [{}], expected: { page: 1, pageSize: 20, offset: 0 } },
+      { args: [{ page: '3', pageSize: '25' }], expected: { page: 3, pageSize: 25, offset: 50 } },
+      { args: [{ page: 2, pageSize: 10 }], expected: { page: 2, pageSize: 10, offset: 10 } },
+      { args: [{ page: '0', pageSize: '0' }], expected: { page: 1, pageSize: 20, offset: 0 } },
+      { args: [{ page: '-5', pageSize: '999' }], expected: { page: 1, pageSize: 100, offset: 0 } },
+      { args: [{ page: '2.5', pageSize: 'abc' }], expected: { page: 1, pageSize: 20, offset: 0 } },
+      { args: [{ page: ' 4 ', pageSize: ' 5 ' }], expected: { page: 4, pageSize: 5, offset: 15 } },
+    ],
+  },
 ];

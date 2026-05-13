@@ -48,14 +48,14 @@ export const googleProvider = {
     return !!process.env.GOOGLE_CLIENT_ID && !!process.env.GOOGLE_CLIENT_SECRET;
   },
 
-  buildAuthUrl({ next } = {}) {
+  async buildAuthUrl({ next } = {}) {
     if (!this.enabled()) {
       throw new HttpError(503, 'Google OAuth not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in Backend/.env');
     }
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const redirectUri = process.env.GOOGLE_REDIRECT_URI || DEFAULT_REDIRECT_URI;
     const state = crypto.randomBytes(16).toString('hex');
-    q.insertOAuthState({ state, redirect: normalizeNext(next) });
+    await q.insertOAuthState({ state, redirect: normalizeNext(next) });
 
     const params = new URLSearchParams({
       client_id: clientId,
@@ -73,9 +73,9 @@ export const googleProvider = {
     const defaultFrontend = process.env.GOOGLE_FRONTEND_REDIRECT || DEFAULT_FRONTEND_REDIRECT;
     if (!code) return { error: 'missing_code', frontend: defaultFrontend };
 
-    const stateRow = q.findOAuthState(state);
+    const stateRow = await q.findOAuthState(state);
     if (!stateRow) return { error: 'invalid_state', frontend: defaultFrontend };
-    q.deleteOAuthState(state);
+    await q.deleteOAuthState(state);
 
     const frontend = buildFrontendRedirect(defaultFrontend, stateRow.redirect);
     try {
@@ -131,21 +131,25 @@ async function loginOrCreateWithGoogle(code) {
   const name = profile.name || profile.given_name || email.split('@')[0];
   const avatar = profile.picture || null;
 
-  let user = q.findUserByGoogleId(sub);
-  if (!user && email) user = q.findUserByEmail(email);
+  let user = await q.findUserByGoogleId(sub);
+  if (!user && email) user = await q.findUserByEmail(email);
 
   if (user) {
-    q.linkGoogleToUser(user.id, { googleId: sub, avatarUrl: avatar, fullName: name });
+    await q.linkGoogleToUser(user.id, { googleId: sub, avatarUrl: avatar, fullName: name });
   } else {
     const baseUsername = (profile.given_name || email.split('@')[0] || 'user')
       .toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 24) || 'user';
     let username = baseUsername;
     let n = 0;
-    while (q.findUserByUsername(username)) {
+    while (await q.findUserByUsername(username)) {
       n += 1;
       username = `${baseUsername}${n}`;
     }
-    user = q.insertGoogleUser({ username, email, googleId: sub, avatarUrl: avatar, fullName: name });
+    // First user on a fresh install becomes ADMIN — see ADR 0006.
+    const role = (await q.isFirstUser()) ? 'ADMIN' : 'STUDENT';
+    user = await q.insertGoogleUser({
+      username, email, googleId: sub, avatarUrl: avatar, fullName: name, role,
+    });
   }
   return q.findUserById(user.id);
 }

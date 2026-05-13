@@ -1,12 +1,12 @@
 # 0002 — Move from SQLite to PostgreSQL with versioned migrations
 
-- **Status:** accepted (implementation pending)
+- **Status:** accepted (implemented with raw `pg`)
 - **Date:** 2026-05-07
 
 ## Context
 
-The current backend uses SQLite via `better-sqlite3` with an "auto-migrate
-columns at runtime" strategy in `src/db.js` (`ensureColumn(...)`). This was
+The backend used SQLite via `better-sqlite3` with an "auto-migrate
+columns at runtime" strategy in `src/shared/db.js` (`ensureColumn(...)`). This was
 fine for a self-contained demo, but is wrong for the new direction:
 
 - **On-prem upgrade safety.** Each university deployment will be on a
@@ -32,12 +32,9 @@ fine for a self-contained demo, but is wrong for the new direction:
    in numeric order at startup).
 3. The schema must be expressed in plain SQL, not in an ORM-specific DSL,
    so that customers can audit it without learning our toolchain.
-4. The query layer will use a thin TypeScript-friendly client. Candidates:
-   - **node-postgres (`pg`)** — minimal, no abstraction, full SQL control.
-   - **Kysely** — type-safe query builder, no model layer, easy to read.
-   - **Drizzle** — type-safe, includes a migration runner.
-   We will pick during the migration spike; Kysely is the leading candidate
-   for matching our "no enterprise slojka" policy.
+4. The query layer uses **node-postgres (`pg`)** — minimal, no ORM/model
+   layer, full SQL control, and closest to the pre-existing handwritten
+   `queries.js` style in this codebase.
 5. Tests must run against a real Postgres (via `docker compose` in CI), not
    against SQLite. This eliminates the class of bugs where dialect
    differences hide in CI.
@@ -57,16 +54,13 @@ fine for a self-contained demo, but is wrong for the new direction:
 
 ## Migration plan (sketch)
 
-1. Add `pg` (or chosen client) and a minimal migration runner.
-2. Translate the existing `db.js` schema into `0001_initial.sql`.
-3. Rewrite each module's queries to use the new client. Keep prepared-
-   statement style.
-4. Update test setup to spin up a Postgres container (via docker or
-   `pg-mem` for unit tests where appropriate).
-5. Provide a one-off SQLite-to-Postgres data export tool only if anyone
-   currently has data they want to keep (development-only; production
-   never shipped on SQLite).
-6. Remove `better-sqlite3` and the runtime `ensureColumn` mechanism.
+1. Add `pg` and a minimal migration runner.
+2. Translate the existing schema into `Backend/db/migrations/0001_initial.sql`.
+3. Rewrite each module's queries/services/routes to async Postgres access
+   while preserving ADR 0003 boundaries.
+4. Update test setup and CI to run against a real Postgres service.
+5. Keep `better-sqlite3` only inside the SQL judge module, where it still
+   powers the in-memory per-submission database used for SQL exercises.
 
 ## Future re-evaluation
 

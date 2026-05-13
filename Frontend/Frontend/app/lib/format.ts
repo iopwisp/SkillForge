@@ -42,6 +42,8 @@ export function statusColor(s: string) {
     case "TLE":           return "text-amber-500";
     case "RUNTIME_ERROR": return "text-orange-500";
     case "COMPILE_ERROR": return "text-rose-500";
+    case "JUDGE_ERROR":   return "text-rose-500";
+    case "PENDING":       return "text-muted-foreground";
     default:              return "text-muted-foreground";
   }
 }
@@ -53,6 +55,7 @@ export function statusLabel(s: string) {
     case "TLE":           return "Time Limit Exceeded";
     case "RUNTIME_ERROR": return "Runtime Error";
     case "COMPILE_ERROR": return "Compile Error";
+    case "JUDGE_ERROR":   return "Judge Error";
     case "PENDING":       return "Pending";
     default:              return s;
   }

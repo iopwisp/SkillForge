@@ -18,6 +18,13 @@
 
 import ivm from 'isolated-vm';
 import Database from 'better-sqlite3';
+import {
+  normalizeExternalLanguage,
+  runGoJudge,
+  runJavaJudge,
+  runPythonJudge,
+} from './runtimes.js';
+import { runStdioJudge, runStdioOnce } from './stdio-exec.js';
 
 const DEFAULT_TIME_LIMIT_MS = 2000;
 const PER_CALL_TIMEOUT_MS   = 1000;
@@ -435,23 +442,40 @@ function verdictNoTests() {
 
 const JS_LIKE_LANGS = new Set(['javascript', 'typescript', 'js', 'ts', 'node']);
 
-export function runJudge(problem, code, language) {
+export function runJudge(problem, code, language, options) {
+  const type = (problem.problem_type || 'ALGORITHM').toUpperCase();
+
+  if (type === 'STDIO') {
+    if (options?.kind === 'run') {
+      return runStdioOnce(problem, code, language, options.stdin);
+    }
+    return runStdioJudge(problem, code, language);
+  }
+
   const which = selectJudge(problem, language);
   if (which === 'sql') return runSqlJudge(problem, code);
   if (which === 'js') return runJsJudge(problem, code);
+  if (which === 'python') return runPythonJudge(problem, code);
+  if (which === 'java') return runJavaJudge(problem, code);
+  if (which === 'go') return runGoJudge(problem, code);
+  if (which === 'unsupported') {
+    return compileError({
+      tests: safeJson(problem.test_cases_json, []),
+      error: `Unsupported language "${language}" for this problem.`,
+    });
+  }
   return judgeHeuristic(problem, code);
 }
 
 function selectJudge(problem, language) {
+  const normalizedLanguage = String(language || '').trim().toLowerCase();
+  const externalLanguage = normalizeExternalLanguage(normalizedLanguage);
   const type = (problem.problem_type || 'ALGORITHM').toUpperCase();
   if (type === 'SQL') return 'sql';
-  if (type === 'BACKEND' || type === 'FRONTEND') {
-    if (JS_LIKE_LANGS.has(language)) return 'js';
-    return 'heuristic';
-  }
-  // ALGORITHM
-  if (problem.test_cases_json && JS_LIKE_LANGS.has(language)) return 'js';
-  return 'heuristic';
+  if (!problem.test_cases_json) return 'heuristic';
+  if (JS_LIKE_LANGS.has(normalizedLanguage)) return 'js';
+  if (externalLanguage) return externalLanguage;
+  return 'unsupported';
 }
 
 /**

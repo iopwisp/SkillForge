@@ -3,8 +3,9 @@ import { Link, useParams, useNavigate } from "react-router";
 import { toast } from "sonner";
 import {
   Play, Send, ArrowLeft, BookOpen, Lightbulb, Star, Clock, MemoryStick, History,
-  ChevronRight, RotateCcw, Database,
+  ChevronRight, RotateCcw, Database, Terminal,
 } from "lucide-react";
+import { StdioPerTestResults } from "~/components/stdio/StdioPerTestResults";
 import { api } from "~/lib/api";
 import { useAuth } from "~/lib/auth";
 import type { ProblemDetail, Submission } from "~/lib/types";
@@ -29,17 +30,35 @@ const ALGO_LANGS = [
   { value: "typescript", label: "TypeScript" },
   { value: "python",     label: "Python" },
   { value: "java",       label: "Java" },
+  { value: "go",         label: "Go" },
   { value: "cpp",        label: "C++" },
 ];
-const JS_ONLY_LANGS = [
+const CODE_LANGS = [
   { value: "javascript", label: "JavaScript" },
   { value: "typescript", label: "TypeScript" },
+  { value: "python",     label: "Python" },
+  { value: "java",       label: "Java" },
+  { value: "go",         label: "Go" },
 ];
 const SQL_LANGS = [{ value: "sql", label: "SQL" }];
 
+/** Maps backend language allowlist values to display labels. */
+const STDIO_LANG_MAP: Record<string, { value: string; label: string }> = {
+  JAVASCRIPT: { value: "javascript", label: "JavaScript" },
+  PYTHON:     { value: "python",     label: "Python" },
+  JAVA:       { value: "java",       label: "Java" },
+  GO:         { value: "go",         label: "Go" },
+  CPP:        { value: "cpp",        label: "C++" },
+};
+
 function languagesFor(problem: ProblemDetail) {
+  if (problem.problemType === "STDIO" && problem.languageAllowlist?.length) {
+    return problem.languageAllowlist
+      .map(l => STDIO_LANG_MAP[l.toUpperCase()])
+      .filter(Boolean);
+  }
   if (problem.problemType === "SQL") return SQL_LANGS;
-  if (problem.problemType === "BACKEND" || problem.problemType === "FRONTEND") return JS_ONLY_LANGS;
+  if (problem.problemType === "BACKEND" || problem.problemType === "FRONTEND") return CODE_LANGS;
   return ALGO_LANGS;
 }
 
@@ -47,14 +66,44 @@ function defaultLanguage(problem: ProblemDetail) {
   return languagesFor(problem)[0]?.value || "javascript";
 }
 
-const DEFAULT_TEMPLATE: Record<string, string> = {
-  javascript: `// Write your solution here\nvar solution = function() {\n    \n};\n`,
-  typescript: `// Write your solution here\nfunction solution() {\n    \n}\n`,
-  python:     `# Write your solution here\nclass Solution:\n    def solve(self):\n        pass\n`,
-  java:       `// Write your solution here\nclass Solution {\n    public void solve() {\n        \n    }\n}\n`,
-  cpp:        `// Write your solution here\nclass Solution {\npublic:\n    void solve() {\n        \n    }\n};\n`,
-  sql:        `-- Your SQL here\nSELECT * FROM ...;\n`,
-};
+function defaultTemplate(language: string, problem?: ProblemDetail | null): string {
+  // STDIO problems get full-program templates (no function harness)
+  if (problem?.problemType === "STDIO") {
+    return stdioTemplate(language);
+  }
+  const fn = problem?.functionName || "solution";
+  const templates: Record<string, string> = {
+    javascript: `// Write your solution here\nfunction ${fn}(...args) {\n  \n}\n`,
+    typescript: `// Write your solution here\nfunction ${fn}(...args: any[]): any {\n  \n}\n`,
+    python: `# Write your solution here\ndef ${fn}(*args):\n    pass\n`,
+    java: `import java.util.*;\n\nclass Solution {\n    public Object ${fn}(Object... args) {\n        return null;\n    }\n}\n`,
+    go: `package main\n\nfunc ${fn}(args ...any) any {\n    return nil\n}\n`,
+    cpp: `// Write your solution here\nclass Solution {\npublic:\n    void ${fn}() {\n        \n    }\n};\n`,
+    sql: `-- Your SQL here\nSELECT * FROM ...;\n`,
+  };
+  return templates[language] || "";
+}
+
+function stdioTemplate(language: string): string {
+  const templates: Record<string, string> = {
+    javascript: `const readline = require('readline');\nconst rl = readline.createInterface({ input: process.stdin });\nconst lines = [];\nrl.on('line', (line) => lines.push(line));\nrl.on('close', () => {\n  // Your solution here\n  \n});\n`,
+    python: `import sys\n\ndef main():\n    # Your solution here\n    input_data = sys.stdin.read().split()\n    \n\nif __name__ == '__main__':\n    main()\n`,
+    java: `import java.util.*;\n\npublic class Main {\n    public static void main(String[] args) {\n        Scanner sc = new Scanner(System.in);\n        // Your solution here\n        \n    }\n}\n`,
+    go: `package main\n\nimport (\n    "bufio"\n    "fmt"\n    "os"\n)\n\nfunc main() {\n    reader := bufio.NewReader(os.Stdin)\n    _ = reader\n    // Your solution here\n    fmt.Println()\n}\n`,
+    cpp: `#include <iostream>\nusing namespace std;\n\nint main() {\n    // Your solution here\n    \n    return 0;\n}\n`,
+  };
+  return templates[language] || `// Write your solution here\n`;
+}
+
+/** Response shape from POST /api/submissions/:slug/run for STDIO problems. */
+interface StdioRunResult {
+  stdout: string;
+  stderr: string;
+  verdict: string;
+  timeMs: number;
+  memoryMb: number;
+  timedOut: boolean;
+}
 
 export default function ProblemDetailPage() {
   const { slug = "" } = useParams();
@@ -71,6 +120,10 @@ export default function ProblemDetailPage() {
   const [tab, setTab] = useState<"description" | "schema" | "submissions" | "hints">("description");
   const [resultTab, setResultTab] = useState<"testcase" | "result">("testcase");
 
+  // STDIO-specific state
+  const [stdin, setStdin] = useState<string>("");
+  const [stdioRunResult, setStdioRunResult] = useState<StdioRunResult | null>(null);
+
   const codeStorageKey = useMemo(() => `skillforge.code.${slug}.${language}`, [slug, language]);
 
   // Load problem
@@ -82,6 +135,10 @@ export default function ProblemDetailPage() {
       const langs = languagesFor(p);
       if (!langs.some(l => l.value === language)) {
         setLanguage(defaultLanguage(p));
+      }
+      // Pre-populate stdin with first sample test case for STDIO problems
+      if (p.problemType === "STDIO" && p.sampleTestCases?.length) {
+        setStdin(p.sampleTestCases[0].stdin);
       }
     })
       .catch((e) => {
@@ -104,7 +161,7 @@ export default function ProblemDetailPage() {
     if (saved) {
       setCode(saved);
     } else {
-      const starter = problem.starterCode?.[language] ?? DEFAULT_TEMPLATE[language] ?? "";
+      const starter = problem.starterCode?.[language] ?? defaultTemplate(language, problem);
       setCode(starter);
     }
   }, [problem, language, codeStorageKey]);
@@ -117,7 +174,7 @@ export default function ProblemDetailPage() {
 
   function resetCode() {
     if (!problem) return;
-    const starter = problem.starterCode?.[language] ?? DEFAULT_TEMPLATE[language] ?? "";
+    const starter = problem.starterCode?.[language] ?? defaultTemplate(language, problem);
     setCode(starter);
     toast.success("Reset to starter code");
   }
@@ -127,14 +184,29 @@ export default function ProblemDetailPage() {
     setRunning(true);
     setResultTab("result");
     try {
-      const res = await api<any>(`/submissions/${slug}/run`, { body: { language, code } });
-      setResult({
-        id: 0, status: res.status, language, code,
-        runtimeMs: res.runtimeMs, memoryKb: res.memoryKb,
-        testsPassed: res.testsPassed, testsTotal: res.testsTotal,
-        output: res.output, error: res.error,
-        createdAt: new Date().toISOString(),
-      });
+      if (problem?.problemType === "STDIO") {
+        // STDIO Run: send stdin, get stdout/stderr/verdict
+        const res = await api<StdioRunResult>(`/submissions/${slug}/run`, {
+          body: { language, code, stdin },
+        });
+        setStdioRunResult(res);
+        // Also set a generic result for the result panel
+        setResult({
+          id: 0, status: res.verdict as any, language, code,
+          runtimeMs: res.timeMs, memoryKb: Math.round(res.memoryMb * 1024),
+          output: res.stdout || null, error: res.stderr || null,
+          createdAt: new Date().toISOString(),
+        });
+      } else {
+        const res = await api<any>(`/submissions/${slug}/run`, { body: { language, code } });
+        setResult({
+          id: 0, status: res.status, language, code,
+          runtimeMs: res.runtimeMs, memoryKb: res.memoryKb,
+          testsPassed: res.testsPassed, testsTotal: res.testsTotal,
+          output: res.output, error: res.error,
+          createdAt: new Date().toISOString(),
+        });
+      }
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "Run failed");
     } finally {
@@ -142,23 +214,62 @@ export default function ProblemDetailPage() {
     }
   }
 
+  /** Poll GET /api/submissions/:id until the status leaves PENDING. */
+  async function pollSubmission(id: number, signal: AbortSignal): Promise<Submission> {
+    const MAX_ATTEMPTS = 60; // ~36 s
+    for (let i = 0; i < MAX_ATTEMPTS; i++) {
+      await new Promise(r => setTimeout(r, 600));
+      if (signal.aborted) throw new DOMException("Aborted", "AbortError");
+      const sub = await api<Submission>(`/submissions/${id}`);
+      if (sub.status !== "PENDING") return sub;
+    }
+    throw new Error("Judging timed out — check back later");
+  }
+
+  function handleVerdict(res: Submission) {
+    if (res.status === "ACCEPTED") {
+      toast.success("Accepted!");
+      api<ProblemDetail>(`/problems/${slug}`).then(setProblem).catch(() => {});
+    } else {
+      toast.error(statusLabel(res.status));
+    }
+  }
+
+  // Abort controller for in-flight polling; cleaned up on unmount.
+  const pollAbortRef = useRef<AbortController | null>(null);
+  useEffect(() => () => { pollAbortRef.current?.abort(); }, []);
+
   async function submit() {
     if (!user) return toast.error("Sign in to submit");
+    pollAbortRef.current?.abort();
+    pollAbortRef.current = new AbortController();
+    const signal = pollAbortRef.current.signal;
+
     setSubmitting(true);
     setResultTab("result");
     try {
-      const res = await api<Submission>(`/submissions/${slug}`, { body: { language, code } });
+      const idempotencyKey = crypto.randomUUID();
+      const res = await api<Submission>(`/submissions/${slug}`, {
+        body: { language, code },
+        headers: { "Idempotency-Key": idempotencyKey },
+      });
+
       setResult(res);
       setSubmissions(s => [res, ...s]);
-      if (res.status === "ACCEPTED") {
-        toast.success("Accepted! 🎉");
-        // refresh problem to update solved badge
-        api<ProblemDetail>(`/problems/${slug}`).then(setProblem).catch(() => {});
+
+      if (res.status === "PENDING") {
+        // Async judge — poll until final verdict
+        const final = await pollSubmission(res.id, signal);
+        setResult(final);
+        setSubmissions(s => s.map(sub => sub.id === final.id ? final : sub));
+        handleVerdict(final);
       } else {
-        toast.error(statusLabel(res.status));
+        // Inline judge — already finalized
+        handleVerdict(res);
       }
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "Submission failed");
+      if (e instanceof DOMException && e.name === "AbortError") return;
+      toast.error(e instanceof ApiError ? e.message : (e as Error).message || "Submission failed");
     } finally {
       setSubmitting(false);
     }
@@ -176,6 +287,8 @@ export default function ProblemDetailPage() {
   }
 
   if (!problem) return <div className="h-[80vh]"><Loading /></div>;
+
+  const isStdio = problem.problemType === "STDIO";
 
   return (
     <div className="h-[calc(100vh-3.5rem)] flex flex-col">
@@ -254,77 +367,251 @@ export default function ProblemDetailPage() {
 
         <ResizableHandle withHandle className="bg-border" />
 
-        {/* RIGHT: editor + result */}
+        {/* RIGHT: editor + result (branched for STDIO) */}
         <ResizablePanel defaultSize={58} minSize={30}>
-          <ResizablePanelGroup direction="vertical">
-            {/* Editor */}
-            <ResizablePanel defaultSize={62} minSize={20}>
-              <div className="h-full flex flex-col bg-zinc-950">
-                <div className="flex items-center gap-2 px-3 py-2 border-b border-zinc-800 bg-zinc-900/60">
-                  <Select value={language} onValueChange={setLanguage}>
-                    <SelectTrigger className="w-[150px] h-8 bg-zinc-900 border-zinc-800 text-zinc-200 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {languagesFor(problem).map(l => (
-                        <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {problem.functionName && (
-                    <span className="text-xs text-zinc-500 font-mono ml-1 hidden md:inline" title="Required entry-point function">
-                      fn: <span className="text-violet-400">{problem.functionName}</span>
+          {isStdio ? (
+            <StdioWorkspace
+              problem={problem}
+              language={language}
+              setLanguage={setLanguage}
+              code={code}
+              setCode={setCode}
+              stdin={stdin}
+              setStdin={setStdin}
+              stdioRunResult={stdioRunResult}
+              result={result}
+              running={running}
+              submitting={submitting}
+              resetCode={resetCode}
+            />
+          ) : (
+            <ResizablePanelGroup direction="vertical">
+              {/* Editor */}
+              <ResizablePanel defaultSize={62} minSize={20}>
+                <div className="h-full flex flex-col bg-card">
+                  <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-muted/40">
+                    <Select value={language} onValueChange={setLanguage}>
+                      <SelectTrigger className="w-[150px] h-8 border-border bg-background text-foreground text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {languagesFor(problem).map(l => (
+                          <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {problem.functionName && (
+                      <span className="text-xs text-muted-foreground font-mono ml-1 hidden md:inline" title="Required entry-point function">
+                        fn: <span className="text-primary">{problem.functionName}</span>
+                      </span>
+                    )}
+                    <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground" onClick={resetCode}>
+                      <RotateCcw className="size-3.5 mr-1.5" /> Reset
+                    </Button>
+                    <span className="ml-auto text-xs text-muted-foreground font-mono">
+                      {code.split("\n").length} lines
                     </span>
-                  )}
-                  <Button variant="ghost" size="sm" className="text-zinc-400 hover:text-zinc-100" onClick={resetCode}>
-                    <RotateCcw className="size-3.5 mr-1.5" /> Reset
-                  </Button>
-                  <span className="ml-auto text-xs text-zinc-500 font-mono">
-                    {code.split("\n").length} lines
-                  </span>
+                  </div>
+                  <CodeMirrorLite value={code} onChange={setCode} />
                 </div>
-                <CodeMirrorLite value={code} onChange={setCode} />
-              </div>
-            </ResizablePanel>
+              </ResizablePanel>
 
-            <ResizableHandle withHandle className="bg-border" />
+              <ResizableHandle withHandle className="bg-border" />
 
-            {/* Result panel */}
-            <ResizablePanel defaultSize={38} minSize={15} className="bg-card/40">
-              <div className="h-full flex flex-col">
-                <Tabs value={resultTab} onValueChange={(v) => setResultTab(v as any)} className="h-full flex flex-col">
-                  <div className="px-3 pt-2 border-b border-border">
-                    <TabsList className="bg-transparent p-0 gap-1">
-                      <TabsTrigger value="testcase" className="data-[state=active]:bg-accent">Examples</TabsTrigger>
-                      <TabsTrigger value="result" className="data-[state=active]:bg-accent">Result</TabsTrigger>
-                    </TabsList>
-                  </div>
-                  <div className="flex-1 overflow-y-auto scrollbar-thin">
-                    <TabsContent value="testcase" className="m-0 p-4 space-y-3">
-                      {problem.examples.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No examples for this problem.</p>
-                      ) : problem.examples.map((ex, i) => (
-                        <div key={i} className="rounded-lg border border-border bg-card p-3">
-                          <div className="text-xs font-semibold text-muted-foreground mb-2">Example {i + 1}</div>
-                          <div className="space-y-2 text-sm font-mono">
-                            <KV k="Input"  v={ex.input} />
-                            <KV k="Output" v={ex.output} />
-                            {ex.explanation && <KV k="Note" v={ex.explanation} mono={false} />}
+              {/* Result panel */}
+              <ResizablePanel defaultSize={38} minSize={15} className="bg-card/40">
+                <div className="h-full flex flex-col">
+                  <Tabs value={resultTab} onValueChange={(v) => setResultTab(v as any)} className="h-full flex flex-col">
+                    <div className="px-3 pt-2 border-b border-border">
+                      <TabsList className="bg-transparent p-0 gap-1">
+                        <TabsTrigger value="testcase" className="data-[state=active]:bg-accent">Examples</TabsTrigger>
+                        <TabsTrigger value="result" className="data-[state=active]:bg-accent">Result</TabsTrigger>
+                      </TabsList>
+                    </div>
+                    <div className="flex-1 overflow-y-auto scrollbar-thin">
+                      <TabsContent value="testcase" className="m-0 p-4 space-y-3">
+                        {problem.examples.length === 0 ? (
+                          <p className="text-sm text-muted-foreground">No examples for this problem.</p>
+                        ) : problem.examples.map((ex, i) => (
+                          <div key={i} className="rounded-lg border border-border bg-card p-3">
+                            <div className="text-xs font-semibold text-muted-foreground mb-2">Example {i + 1}</div>
+                            <div className="space-y-2 text-sm font-mono">
+                              <KV k="Input"  v={ex.input} />
+                              <KV k="Output" v={ex.output} />
+                              {ex.explanation && <KV k="Note" v={ex.explanation} mono={false} />}
+                            </div>
                           </div>
-                        </div>
-                      ))}
-                    </TabsContent>
-                    <TabsContent value="result" className="m-0 p-4">
-                      <ResultView result={result} running={running || submitting} />
-                    </TabsContent>
-                  </div>
-                </Tabs>
-              </div>
-            </ResizablePanel>
-          </ResizablePanelGroup>
+                        ))}
+                      </TabsContent>
+                      <TabsContent value="result" className="m-0 p-4">
+                        <ResultView result={result} running={running || submitting} />
+                      </TabsContent>
+                    </div>
+                  </Tabs>
+                </div>
+              </ResizablePanel>
+            </ResizablePanelGroup>
+          )}
         </ResizablePanel>
       </ResizablePanelGroup>
     </div>
+  );
+}
+
+/** STDIO workspace: editor on top, stdin/stdout panels below. */
+function StdioWorkspace({
+  problem, language, setLanguage, code, setCode,
+  stdin, setStdin, stdioRunResult, result, running, submitting, resetCode,
+}: {
+  problem: ProblemDetail;
+  language: string;
+  setLanguage: (v: string) => void;
+  code: string;
+  setCode: (v: string) => void;
+  stdin: string;
+  setStdin: (v: string) => void;
+  stdioRunResult: StdioRunResult | null;
+  result: Submission | null;
+  running: boolean;
+  submitting: boolean;
+  resetCode: () => void;
+}) {
+  return (
+    <ResizablePanelGroup direction="vertical">
+      {/* Editor */}
+      <ResizablePanel defaultSize={55} minSize={20}>
+        <div className="h-full flex flex-col bg-card">
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-muted/40">
+            <Select value={language} onValueChange={setLanguage}>
+              <SelectTrigger className="w-[150px] h-8 border-border bg-background text-foreground text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {languagesFor(problem).map(l => (
+                  <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <span className="text-[11px] uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              Full Program
+            </span>
+            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground" onClick={resetCode}>
+              <RotateCcw className="size-3.5 mr-1.5" /> Reset
+            </Button>
+            <span className="ml-auto text-xs text-muted-foreground font-mono">
+              {code.split("\n").length} lines
+            </span>
+          </div>
+          <CodeMirrorLite value={code} onChange={setCode} />
+        </div>
+      </ResizablePanel>
+
+      <ResizableHandle withHandle className="bg-border" />
+
+      {/* Stdin / Stdout panels */}
+      <ResizablePanel defaultSize={45} minSize={15} className="bg-card/40">
+        <ResizablePanelGroup direction="horizontal">
+          {/* Stdin */}
+          <ResizablePanel defaultSize={50} minSize={20}>
+            <div className="h-full flex flex-col">
+              <div className="px-3 py-2 border-b border-border bg-muted/40 flex items-center gap-2">
+                <Terminal className="size-3.5 text-muted-foreground" />
+                <span className="text-xs font-medium">stdin</span>
+              </div>
+              <textarea
+                value={stdin}
+                onChange={(e) => setStdin(e.target.value)}
+                placeholder="Enter input here..."
+                spellCheck={false}
+                className="flex-1 w-full p-3 bg-card text-foreground font-mono text-[13px] leading-relaxed resize-none focus:outline-none scrollbar-thin"
+              />
+            </div>
+          </ResizablePanel>
+
+          <ResizableHandle withHandle className="bg-border" />
+
+          {/* Stdout / Result */}
+          <ResizablePanel defaultSize={50} minSize={20}>
+            <div className="h-full flex flex-col">
+              <div className="px-3 py-2 border-b border-border bg-muted/40 flex items-center gap-2">
+                <Terminal className="size-3.5 text-muted-foreground" />
+                <span className="text-xs font-medium">Output</span>
+                {stdioRunResult && (
+                  <StdioVerdictBadge verdict={stdioRunResult.verdict} timedOut={stdioRunResult.timedOut} />
+                )}
+                {stdioRunResult && (
+                  <span className="ml-auto text-[11px] text-muted-foreground tabular-nums">
+                    {stdioRunResult.timeMs}ms · {stdioRunResult.memoryMb.toFixed(1)}MB
+                  </span>
+                )}
+              </div>
+              <div className="flex-1 overflow-y-auto scrollbar-thin p-3">
+                {running && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <span className="size-2 rounded-full bg-amber-500 animate-pulse" />
+                    Running…
+                  </div>
+                )}
+                {!running && !stdioRunResult && !result && (
+                  <p className="text-sm text-muted-foreground">Run your code to see output here.</p>
+                )}
+                {!running && stdioRunResult && (
+                  <div className="space-y-3">
+                    {stdioRunResult.stdout && (
+                      <div>
+                        <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-1">stdout</div>
+                        <pre className="rounded-md border border-border bg-muted/30 p-3 text-xs font-mono whitespace-pre-wrap">{stdioRunResult.stdout}</pre>
+                      </div>
+                    )}
+                    {stdioRunResult.stderr && (
+                      <div>
+                        <div className="text-[11px] uppercase tracking-wider text-rose-400 mb-1">stderr</div>
+                        <pre className="rounded-md border border-rose-500/30 bg-rose-500/5 p-3 text-xs font-mono whitespace-pre-wrap">{stdioRunResult.stderr}</pre>
+                      </div>
+                    )}
+                    {!stdioRunResult.stdout && !stdioRunResult.stderr && (
+                      <p className="text-sm text-muted-foreground italic">No output produced.</p>
+                    )}
+                  </div>
+                )}
+                {!running && !stdioRunResult && result && (
+                  <div className="space-y-4">
+                    <ResultView result={result} running={submitting} />
+                    {result.perTestResults && result.perTestResults.length > 0 && (
+                      <StdioPerTestResults
+                        perTestResults={result.perTestResults}
+                        sampleTestCases={problem.sampleTestCases}
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </ResizablePanel>
+        </ResizablePanelGroup>
+      </ResizablePanel>
+    </ResizablePanelGroup>
+  );
+}
+
+function StdioVerdictBadge({ verdict, timedOut }: { verdict: string; timedOut: boolean }) {
+  const color = verdict === "ACCEPTED"
+    ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/20"
+    : timedOut
+      ? "text-amber-400 bg-amber-500/10 border-amber-500/20"
+      : "text-rose-400 bg-rose-500/10 border-rose-500/20";
+  const label = verdict === "ACCEPTED" ? "AC"
+    : verdict === "TLE" || timedOut ? "TLE"
+    : verdict === "MLE" ? "MLE"
+    : verdict === "OLE" ? "OLE"
+    : verdict === "RE" || verdict === "RUNTIME_ERROR" ? "RE"
+    : verdict === "COMPILE_ERROR" ? "CE"
+    : verdict === "WRONG_ANSWER" ? "WA"
+    : verdict;
+  return (
+    <span className={`text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded border ${color}`}>
+      {label}
+    </span>
   );
 }
 
@@ -333,6 +620,7 @@ const TYPE_LABEL: Record<string, string> = {
   SQL: "SQL",
   BACKEND: "Backend",
   FRONTEND: "Frontend",
+  STDIO: "STDIO",
 };
 
 function DescriptionView({ problem }: { problem: ProblemDetail }) {
@@ -365,7 +653,26 @@ function DescriptionView({ problem }: { problem: ProblemDetail }) {
 
       <Markdown content={problem.description} />
 
-      {problem.examples.length > 0 && (
+      {/* STDIO sample test cases */}
+      {problem.problemType === "STDIO" && problem.sampleTestCases && problem.sampleTestCases.length > 0 && (
+        <div className="not-prose mt-6 space-y-3">
+          <h3 className="font-semibold text-sm">Sample Test Cases</h3>
+          {problem.sampleTestCases.map((tc, i) => (
+            <div key={i} className="rounded-lg border border-border bg-muted/30 p-3">
+              <div className="text-xs font-semibold mb-2">
+                {tc.name || `Sample ${i + 1}`}
+              </div>
+              <div className="space-y-2 text-sm font-mono">
+                <KV k="Input"  v={tc.stdin} />
+                <KV k="Expected Output" v={tc.expected_stdout} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Non-STDIO examples */}
+      {problem.problemType !== "STDIO" && problem.examples.length > 0 && (
         <div className="not-prose mt-6 space-y-3">
           {problem.examples.map((ex, i) => (
             <div key={i} className="rounded-lg border border-border bg-muted/30 p-3">
@@ -598,7 +905,7 @@ function SubmissionsView({ submissions }: { submissions: Submission[] }) {
 }
 
 function ResultView({ result, running }: { result: Submission | null; running: boolean }) {
-  if (running) {
+  if (running && (!result || result.status === "PENDING")) {
     return (
       <div className="flex items-center gap-3 text-sm text-muted-foreground">
         <span className="size-2 rounded-full bg-amber-500 animate-pulse" />
@@ -732,7 +1039,7 @@ function CodeMirrorLite({ value, onChange }: { value: string; onChange: (v: stri
       autoCorrect="off"
       autoCapitalize="off"
       autoComplete="off"
-      className="flex-1 w-full p-4 bg-zinc-950 text-zinc-100 font-mono text-[13px] leading-relaxed resize-none focus:outline-none scrollbar-thin"
+      className="flex-1 w-full p-4 bg-card text-foreground font-mono text-[13px] leading-relaxed resize-none focus:outline-none scrollbar-thin"
       style={{ tabSize: 2 }}
     />
   );

@@ -1,5 +1,12 @@
 export type Difficulty = "EASY" | "MEDIUM" | "HARD";
-export type ProblemType = "ALGORITHM" | "SQL" | "BACKEND" | "FRONTEND";
+export type ProblemType = "ALGORITHM" | "SQL" | "BACKEND" | "FRONTEND" | "STDIO";
+
+/**
+ * Closed set of roles, mirrors `auth/middleware.js#ROLES` on the backend.
+ * The bootstrap rule (first user becomes ADMIN, subsequent self-service
+ * signups default to STUDENT) is enforced server-side per ADR 0006.
+ */
+export type Role = "STUDENT" | "INSTRUCTOR" | "ADMIN";
 
 export interface User {
   id: number;
@@ -10,10 +17,26 @@ export interface User {
   bio?: string | null;
   location?: string | null;
   website?: string | null;
-  role: "USER" | "ADMIN";
+  role: Role;
   rating: number;
   theme: "dark" | "light";
   createdAt: string;
+}
+
+export const ROLE_LABEL: Record<Role, string> = {
+  STUDENT: "Student",
+  INSTRUCTOR: "Instructor",
+  ADMIN: "Admin",
+};
+
+/** True iff the user can act as instructor (manage their own courses, etc.). */
+export function canTeach(user: { role: Role } | null | undefined): boolean {
+  return user?.role === "INSTRUCTOR" || user?.role === "ADMIN";
+}
+
+/** True iff the user has installation-wide admin privileges. */
+export function isAdmin(user: { role: Role } | null | undefined): boolean {
+  return user?.role === "ADMIN";
 }
 
 export interface AuthResponse {
@@ -68,10 +91,19 @@ export interface ProblemDetail extends ProblemSummary {
   functionName?: string | null;
   timeLimitMs: number;
   memoryLimitMb: number;
+  /** STDIO-specific: sample test cases visible to students. */
+  sampleTestCases?: Array<{ stdin: string; expected_stdout: string; name?: string }>;
+  /** STDIO-specific: max output size in KB. */
+  outputSizeCapKb?: number;
+  /** STDIO-specific: comparator mode for output comparison. */
+  comparatorMode?: "EXACT" | "TRIMMED" | "WHITESPACE_NORMALIZED";
+  /** STDIO-specific: languages allowed for this problem. */
+  languageAllowlist?: string[];
 }
 
 export type SubmissionStatus =
-  | "ACCEPTED" | "WRONG_ANSWER" | "RUNTIME_ERROR" | "TLE" | "COMPILE_ERROR" | "PENDING";
+  | "ACCEPTED" | "WRONG_ANSWER" | "RUNTIME_ERROR" | "TLE" | "COMPILE_ERROR"
+  | "PENDING" | "JUDGE_ERROR";
 
 export interface Submission {
   id: number;
@@ -87,6 +119,17 @@ export interface Submission {
   beats?: number;
   createdAt: string;
   problem?: { slug: string; title: string; difficulty: Difficulty };
+  /** STDIO-specific: per-test results after judge finalization. */
+  perTestResults?: Array<{
+    index: number;
+    verdict: string;
+    time_ms: number;
+    memory_mb: number;
+    stdout_bytes: number;
+    visibility: 'SAMPLE' | 'HIDDEN';
+    stderr_tail: string;
+    actual_output?: string;
+  }> | null;
 }
 
 export interface DashboardData {

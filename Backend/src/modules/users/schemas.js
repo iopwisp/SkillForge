@@ -8,3 +8,9 @@ export const UpdateProfileSchema = z.object({
   avatarUrl: z.string().url().or(z.literal('')).optional(),
   theme: z.enum(['dark', 'light']).optional(),
 });
+
+/** Body for `PUT /api/users/:id/role`. The closed enum keeps invalid roles
+ *  out of the service entirely — see ADR 0006. */
+export const UpdateRoleSchema = z.object({
+  role: z.enum(['STUDENT', 'INSTRUCTOR', 'ADMIN']),
+});

@@ -1,5 +1,5 @@
 /**
- * Seed script — populates the DB with the catalog data needed to boot SkillForge.
+ * Seed script тАФ populates the DB with the catalog data needed to boot SkillForge.
  * Idempotent: if data already exists it skips.
  *
  * Run: `npm run seed`  (or it auto-runs on first server start).
@@ -7,11 +7,12 @@
 import 'dotenv/config';
 import { fileURLToPath } from 'node:url';
 
-import { db } from '../db.js';
+import { db, placeholders, withTransaction } from '../db.js';
 import { logger } from '../logger.js';
 import { BACKEND_PROBLEMS } from './backend.js';
 import { FRONTEND_PROBLEMS } from './frontend.js';
 import { SQL_PROBLEMS } from './sql.js';
+import { stdioProblems } from './stdio.js';
 
 const CATEGORIES = [
   { slug: 'arrays', name: 'Arrays & Hashing', description: 'Master array manipulation and hash maps', icon: 'Layers', color: 'indigo' },
@@ -44,7 +45,7 @@ You can return the answer in any order.`,
       { input: 'nums = [3,2,4], target = 6', output: '[1,2]' },
       { input: 'nums = [3,3], target = 6', output: '[0,1]' },
     ],
-    constraints: '• 2 ≤ nums.length ≤ 10⁴\n• -10⁹ ≤ nums[i] ≤ 10⁹\n• -10⁹ ≤ target ≤ 10⁹\n• Only one valid answer exists.',
+    constraints: 'тАв 2 тЙд nums.length тЙд 10тБ┤\nтАв -10тБ╣ тЙд nums[i] тЙд 10тБ╣\nтАв -10тБ╣ тЙд target тЙд 10тБ╣\nтАв Only one valid answer exists.',
     hints: ['A really brute force way would be to search for all possible pairs.', 'Try a one-pass hash table for O(n) time.'],
     starterCode: {
       javascript: `/**\n * @param {number[]} nums\n * @param {number} target\n * @return {number[]}\n */\nvar twoSum = function(nums, target) {\n    \n};`,
@@ -62,7 +63,7 @@ You can return the answer in any order.`,
       { input: 's = "anagram", t = "nagaram"', output: 'true' },
       { input: 's = "rat", t = "car"', output: 'false' },
     ],
-    constraints: '• 1 ≤ s.length, t.length ≤ 5 * 10⁴\n• s and t consist of lowercase English letters.',
+    constraints: 'тАв 1 тЙд s.length, t.length тЙд 5 * 10тБ┤\nтАв s and t consist of lowercase English letters.',
     hints: ['Count frequencies of each character.'],
     starterCode: {
       javascript: `var isAnagram = function(s, t) {\n    \n};`,
@@ -78,7 +79,7 @@ You can return the answer in any order.`,
       { input: 'nums = [1,2,3,1]', output: 'true' },
       { input: 'nums = [1,2,3,4]', output: 'false' },
     ],
-    constraints: '• 1 ≤ nums.length ≤ 10⁵\n• -10⁹ ≤ nums[i] ≤ 10⁹',
+    constraints: 'тАв 1 тЙд nums.length тЙд 10тБ╡\nтАв -10тБ╣ тЙд nums[i] тЙд 10тБ╣',
     hints: ['Sort then look for adjacent equal values, or use a Set.'],
     starterCode: {
       javascript: `var containsDuplicate = function(nums) {\n    \n};`,
@@ -94,7 +95,7 @@ You can return the answer in any order.`,
       { input: 'prices = [7,1,5,3,6,4]', output: '5', explanation: 'Buy on day 2 (price = 1), sell on day 5 (price = 6). Profit = 6-1 = 5.' },
       { input: 'prices = [7,6,4,3,1]', output: '0' },
     ],
-    constraints: '• 1 ≤ prices.length ≤ 10⁵\n• 0 ≤ prices[i] ≤ 10⁴',
+    constraints: 'тАв 1 тЙд prices.length тЙд 10тБ╡\nтАв 0 тЙд prices[i] тЙд 10тБ┤',
     hints: ['Track the minimum price seen so far while iterating.'],
     starterCode: {
       javascript: `var maxProfit = function(prices) {\n    \n};`,
@@ -111,7 +112,7 @@ You can return the answer in any order.`,
       { input: 's = "()[]{}"', output: 'true' },
       { input: 's = "(]"', output: 'false' },
     ],
-    constraints: '• 1 ≤ s.length ≤ 10⁴\n• s consists of parentheses only.',
+    constraints: 'тАв 1 тЙд s.length тЙд 10тБ┤\nтАв s consists of parentheses only.',
     hints: ['Use a stack: push openers, pop and compare on closers.'],
     starterCode: {
       javascript: `var isValid = function(s) {\n    \n};`,
@@ -124,7 +125,7 @@ You can return the answer in any order.`,
     tags: 'linked list,recursion',
     description: 'You are given the heads of two sorted linked lists `list1` and `list2`. Merge the two lists into one sorted list. The list should be made by splicing together the nodes of the first two lists. Return the head of the merged linked list.',
     examples: [{ input: 'list1 = [1,2,4], list2 = [1,3,4]', output: '[1,1,2,3,4,4]' }],
-    constraints: '• Number of nodes in both lists is in the range [0, 50].\n• -100 ≤ Node.val ≤ 100',
+    constraints: 'тАв Number of nodes in both lists is in the range [0, 50].\nтАв -100 тЙд Node.val тЙд 100',
     hints: ['Use a dummy head and walk both lists with two pointers.'],
     starterCode: {
       javascript: `var mergeTwoLists = function(list1, list2) {\n    \n};`,
@@ -139,7 +140,7 @@ You can return the answer in any order.`,
     tags: 'array,hash table,string,sorting',
     description: 'Given an array of strings `strs`, group the anagrams together. You can return the answer in any order.',
     examples: [{ input: 'strs = ["eat","tea","tan","ate","nat","bat"]', output: '[["bat"],["nat","tan"],["ate","eat","tea"]]' }],
-    constraints: '• 1 ≤ strs.length ≤ 10⁴\n• 0 ≤ strs[i].length ≤ 100',
+    constraints: 'тАв 1 тЙд strs.length тЙд 10тБ┤\nтАв 0 тЙд strs[i].length тЙд 100',
     hints: ['Use sorted strings as keys in a hash map.'],
     starterCode: {
       javascript: `var groupAnagrams = function(strs) {\n    \n};`,
@@ -152,7 +153,7 @@ You can return the answer in any order.`,
     tags: 'array,hash table,heap',
     description: 'Given an integer array `nums` and an integer `k`, return *the* `k` *most frequent elements*. You may return the answer in any order.',
     examples: [{ input: 'nums = [1,1,1,2,2,3], k = 2', output: '[1,2]' }],
-    constraints: '• 1 ≤ nums.length ≤ 10⁵\n• -10⁴ ≤ nums[i] ≤ 10⁴\n• 1 ≤ k ≤ number of unique elements',
+    constraints: 'тАв 1 тЙд nums.length тЙд 10тБ╡\nтАв -10тБ┤ тЙд nums[i] тЙд 10тБ┤\nтАв 1 тЙд k тЙд number of unique elements',
     hints: ['Bucket sort by frequency to achieve O(n) time.'],
     starterCode: {
       javascript: `var topKFrequent = function(nums, k) {\n    \n};`,
@@ -165,7 +166,7 @@ You can return the answer in any order.`,
     tags: 'array,prefix sum',
     description: 'Given an integer array `nums`, return an array `answer` such that `answer[i]` is equal to the product of all the elements of `nums` except `nums[i]`. You must write an algorithm that runs in O(n) time and **without using the division operation**.',
     examples: [{ input: 'nums = [1,2,3,4]', output: '[24,12,8,6]' }],
-    constraints: '• 2 ≤ nums.length ≤ 10⁵\n• -30 ≤ nums[i] ≤ 30',
+    constraints: 'тАв 2 тЙд nums.length тЙд 10тБ╡\nтАв -30 тЙд nums[i] тЙд 30',
     hints: ['Compute prefix and suffix products in two passes.'],
     starterCode: {
       javascript: `var productExceptSelf = function(nums) {\n    \n};`,
@@ -181,7 +182,7 @@ You can return the answer in any order.`,
       { input: 's = "abcabcbb"', output: '3', explanation: 'The answer is "abc", with length 3.' },
       { input: 's = "bbbbb"', output: '1' },
     ],
-    constraints: '• 0 ≤ s.length ≤ 5 * 10⁴\n• s consists of English letters, digits, symbols and spaces.',
+    constraints: 'тАв 0 тЙд s.length тЙд 5 * 10тБ┤\nтАв s consists of English letters, digits, symbols and spaces.',
     hints: ['Slide a window with a hash set of seen characters.'],
     starterCode: {
       javascript: `var lengthOfLongestSubstring = function(s) {\n    \n};`,
@@ -194,7 +195,7 @@ You can return the answer in any order.`,
     tags: 'array,two pointers,sorting',
     description: 'Given an integer array `nums`, return all the triplets `[nums[i], nums[j], nums[k]]` such that `i != j`, `i != k`, and `j != k`, and `nums[i] + nums[j] + nums[k] == 0`. The solution set must not contain duplicate triplets.',
     examples: [{ input: 'nums = [-1,0,1,2,-1,-4]', output: '[[-1,-1,2],[-1,0,1]]' }],
-    constraints: '• 3 ≤ nums.length ≤ 3000\n• -10⁵ ≤ nums[i] ≤ 10⁵',
+    constraints: 'тАв 3 тЙд nums.length тЙд 3000\nтАв -10тБ╡ тЙд nums[i] тЙд 10тБ╡',
     hints: ['Sort, fix one pointer, two-pointer sweep.'],
     starterCode: {
       javascript: `var threeSum = function(nums) {\n    \n};`,
@@ -210,7 +211,7 @@ You can return the answer in any order.`,
       { input: 'nums = [-1,0,3,5,9,12], target = 9', output: '4' },
       { input: 'nums = [-1,0,3,5,9,12], target = 2', output: '-1' },
     ],
-    constraints: '• 1 ≤ nums.length ≤ 10⁴',
+    constraints: 'тАв 1 тЙд nums.length тЙд 10тБ┤',
     hints: ['Maintain low/high pointers and bisect.'],
     starterCode: {
       javascript: `var search = function(nums, target) {\n    \n};`,
@@ -223,7 +224,7 @@ You can return the answer in any order.`,
     tags: 'linked list,recursion',
     description: 'Given the `head` of a singly linked list, reverse the list, and return the *reversed list*.',
     examples: [{ input: 'head = [1,2,3,4,5]', output: '[5,4,3,2,1]' }],
-    constraints: '• 0 ≤ Number of nodes ≤ 5000',
+    constraints: 'тАв 0 тЙд Number of nodes тЙд 5000',
     hints: ['Iterative: keep prev, curr, next.'],
     starterCode: {
       javascript: `var reverseList = function(head) {\n    \n};`,
@@ -236,7 +237,7 @@ You can return the answer in any order.`,
     tags: 'tree,depth-first search,binary tree',
     description: 'Given the `root` of a binary tree, invert the tree, and return *its root*.',
     examples: [{ input: 'root = [4,2,7,1,3,6,9]', output: '[4,7,2,9,6,3,1]' }],
-    constraints: '• 0 ≤ Nodes ≤ 100\n• -100 ≤ Node.val ≤ 100',
+    constraints: 'тАв 0 тЙд Nodes тЙд 100\nтАв -100 тЙд Node.val тЙд 100',
     hints: ['Swap children, recurse.'],
     starterCode: {
       javascript: `var invertTree = function(root) {\n    \n};`,
@@ -249,7 +250,7 @@ You can return the answer in any order.`,
     tags: 'tree,depth-first search,breadth-first search',
     description: 'Given the `root` of a binary tree, return its *maximum depth*. A tree\'s maximum depth is the number of nodes along the longest path from the root node down to the farthest leaf node.',
     examples: [{ input: 'root = [3,9,20,null,null,15,7]', output: '3' }],
-    constraints: '• 0 ≤ Nodes ≤ 10⁴',
+    constraints: 'тАв 0 тЙд Nodes тЙд 10тБ┤',
     hints: ['1 + max(depth(left), depth(right)).'],
     starterCode: {
       javascript: `var maxDepth = function(root) {\n    \n};`,
@@ -262,7 +263,7 @@ You can return the answer in any order.`,
     tags: 'array,depth-first search,breadth-first search,union find,matrix',
     description: 'Given an `m x n` 2D binary grid `grid` which represents a map of `1`s (land) and `0`s (water), return *the number of islands*. An island is surrounded by water and is formed by connecting adjacent lands horizontally or vertically.',
     examples: [{ input: '[["1","1","0"],["1","0","0"],["0","0","1"]]', output: '2' }],
-    constraints: '• 1 ≤ m, n ≤ 300',
+    constraints: 'тАв 1 тЙд m, n тЙд 300',
     hints: ['DFS/BFS each unvisited land cell and mark connected cells.'],
     starterCode: {
       javascript: `var numIslands = function(grid) {\n    \n};`,
@@ -278,8 +279,8 @@ You can return the answer in any order.`,
       { input: 'n = 2', output: '2' },
       { input: 'n = 3', output: '3' },
     ],
-    constraints: '• 1 ≤ n ≤ 45',
-    hints: ['Fibonacci sequence — f(n) = f(n-1) + f(n-2).'],
+    constraints: 'тАв 1 тЙд n тЙд 45',
+    hints: ['Fibonacci sequence тАФ f(n) = f(n-1) + f(n-2).'],
     starterCode: {
       javascript: `var climbStairs = function(n) {\n    \n};`,
       python: `class Solution:\n    def climbStairs(self, n: int) -> int:\n        pass`,
@@ -294,7 +295,7 @@ You can return the answer in any order.`,
       { input: 'nums = [1,2,3,1]', output: '4' },
       { input: 'nums = [2,7,9,3,1]', output: '12' },
     ],
-    constraints: '• 1 ≤ nums.length ≤ 100\n• 0 ≤ nums[i] ≤ 400',
+    constraints: 'тАв 1 тЙд nums.length тЙд 100\nтАв 0 тЙд nums[i] тЙд 400',
     hints: ['dp[i] = max(dp[i-1], dp[i-2] + nums[i]).'],
     starterCode: {
       javascript: `var rob = function(nums) {\n    \n};`,
@@ -310,7 +311,7 @@ You can return the answer in any order.`,
       { input: 'nums = [2,3,1,1,4]', output: 'true' },
       { input: 'nums = [3,2,1,0,4]', output: 'false' },
     ],
-    constraints: '• 1 ≤ nums.length ≤ 10⁴',
+    constraints: 'тАв 1 тЙд nums.length тЙд 10тБ┤',
     hints: ['Greedy: track furthest reachable index.'],
     starterCode: {
       javascript: `var canJump = function(nums) {\n    \n};`,
@@ -323,7 +324,7 @@ You can return the answer in any order.`,
     tags: 'array,two pointers,greedy',
     description: 'You are given an integer array `height` of length `n`. There are `n` vertical lines drawn such that the two endpoints of the *i*-th line are `(i, 0)` and `(i, height[i])`. Find two lines that together with the x-axis form a container, such that the container contains the most water. Return *the maximum amount of water* a container can store.',
     examples: [{ input: 'height = [1,8,6,2,5,4,8,3,7]', output: '49' }],
-    constraints: '• n == height.length\n• 2 ≤ n ≤ 10⁵',
+    constraints: 'тАв n == height.length\nтАв 2 тЙд n тЙд 10тБ╡',
     hints: ['Two pointers from each end; move the shorter one.'],
     starterCode: {
       javascript: `var maxArea = function(height) {\n    \n};`,
@@ -338,7 +339,7 @@ You can return the answer in any order.`,
     tags: 'array,two pointers,dynamic programming,stack',
     description: 'Given `n` non-negative integers representing an elevation map where the width of each bar is `1`, compute how much water it can trap after raining.',
     examples: [{ input: 'height = [0,1,0,2,1,0,1,3,2,1,2,1]', output: '6' }],
-    constraints: '• n == height.length\n• 1 ≤ n ≤ 2 * 10⁴',
+    constraints: 'тАв n == height.length\nтАв 1 тЙд n тЙд 2 * 10тБ┤',
     hints: ['Two-pointer with running max from each side.'],
     starterCode: {
       javascript: `var trap = function(height) {\n    \n};`,
@@ -351,7 +352,7 @@ You can return the answer in any order.`,
     tags: 'array,binary search,divide and conquer',
     description: 'Given two sorted arrays `nums1` and `nums2` of size `m` and `n` respectively, return *the median* of the two sorted arrays. The overall run time complexity should be `O(log (m+n))`.',
     examples: [{ input: 'nums1 = [1,3], nums2 = [2]', output: '2.00000' }],
-    constraints: '• 0 ≤ m ≤ 1000\n• 0 ≤ n ≤ 1000',
+    constraints: 'тАв 0 тЙд m тЙд 1000\nтАв 0 тЙд n тЙд 1000',
     hints: ['Binary search the smaller array for the partition.'],
     starterCode: {
       javascript: `var findMedianSortedArrays = function(nums1, nums2) {\n    \n};`,
@@ -364,7 +365,7 @@ You can return the answer in any order.`,
     tags: 'array,hash table,union find',
     description: 'Given an unsorted array of integers `nums`, return the length of the longest consecutive elements sequence. You must write an algorithm that runs in O(n) time.',
     examples: [{ input: 'nums = [100,4,200,1,3,2]', output: '4', explanation: 'The longest consecutive elements sequence is [1,2,3,4]. Therefore its length is 4.' }],
-    constraints: '• 0 ≤ nums.length ≤ 10⁵',
+    constraints: 'тАв 0 тЙд nums.length тЙд 10тБ╡',
     hints: ['For each start (no n-1 in set), expand.'],
     starterCode: {
       javascript: `var longestConsecutive = function(nums) {\n    \n};`,
@@ -377,7 +378,7 @@ You can return the answer in any order.`,
     tags: 'array,breadth-first search,matrix',
     description: 'You are given an `m x n` `grid` where each cell can have one of three values: 0 (empty), 1 (fresh), 2 (rotten). Every minute, any fresh orange that is **4-directionally adjacent** to a rotten orange becomes rotten. Return the minimum number of minutes that must elapse until no cell has a fresh orange. If impossible, return `-1`.',
     examples: [{ input: 'grid = [[2,1,1],[1,1,0],[0,1,1]]', output: '4' }],
-    constraints: '• m == grid.length\n• 1 ≤ m, n ≤ 10',
+    constraints: 'тАв m == grid.length\nтАв 1 тЙд m, n тЙд 10',
     hints: ['Multi-source BFS from all initially rotten cells.'],
     starterCode: {
       javascript: `var orangesRotting = function(grid) {\n    \n};`,
@@ -390,21 +391,8 @@ You can return the answer in any order.`,
 const SEEDED_USERNAMES = ['demo', 'tuskmaster', 'codepilot', 'mammoth', 'syntaxer', 'lambda'];
 const SEEDED_EMAIL_SUFFIX = '@skillforge.dev';
 
-export function runSeed() {
+export async function runSeed() {
   const t0 = Date.now();
-  const insertCategory = db.prepare(`
-    INSERT OR IGNORE INTO categories (slug, name, description, icon, color)
-    VALUES (?, ?, ?, ?, ?)
-  `);
-  const insertProblem = db.prepare(`
-    INSERT OR IGNORE INTO problems (
-      slug, title, description, difficulty, problem_type, category_id, tags,
-      examples_json, constraints, hints_json, starter_code_json, expected_output,
-      test_cases_json, sql_setup, function_name,
-      total_submissions, accepted_submissions
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
 
   // The original 24 algorithm problems are tagged ALGORITHM; the new
   // backend / frontend / SQL sets each carry their own problem_type.
@@ -413,15 +401,37 @@ export function runSeed() {
     ...BACKEND_PROBLEMS.map(p => ({ ...p, problemType: 'BACKEND' })),
     ...FRONTEND_PROBLEMS.map(p => ({ ...p, problemType: 'FRONTEND' })),
     ...SQL_PROBLEMS.map(p => ({ ...p, problemType: 'SQL' })),
+    ...stdioProblems.map(p => ({ ...p, problemType: 'STDIO' })),
   ];
 
-  db.transaction(() => {
+  await withTransaction(async (tx) => {
     for (const c of CATEGORIES) {
-      insertCategory.run(c.slug, c.name, c.description, c.icon, c.color);
+      await tx.none(`
+        INSERT INTO categories (slug, name, description, icon, color)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (slug) DO NOTHING
+      `, [c.slug, c.name, c.description, c.icon, c.color]);
     }
-    const catBySlug = Object.fromEntries(db.prepare(`SELECT id, slug FROM categories`).all().map(r => [r.slug, r.id]));
+
+    const catBySlug = Object.fromEntries(
+      (await tx.many(`SELECT id, slug FROM categories`)).map((r) => [r.slug, r.id]),
+    );
+
     for (const p of ALL_PROBLEMS) {
-      insertProblem.run(
+      await tx.none(`
+        INSERT INTO problems (
+          slug, title, description, difficulty, problem_type, category_id, tags,
+          examples_json, constraints, hints_json, starter_code_json, expected_output,
+          test_cases_json, sql_setup, function_name,
+          total_submissions, accepted_submissions
+        )
+        VALUES (
+          $1, $2, $3, $4, $5, $6, $7,
+          $8, $9, $10, $11, $12,
+          $13, $14, $15, $16, $17
+        )
+        ON CONFLICT (slug) DO NOTHING
+      `, [
         p.slug, p.title, p.description, p.difficulty, p.problemType,
         catBySlug[p.category] || null, p.tags || '',
         JSON.stringify(p.examples || []), p.constraints || '',
@@ -431,11 +441,11 @@ export function runSeed() {
         p.sqlSetup || null,
         p.functionName || null,
         0, 0,
-      );
+      ]);
     }
-  })();
+  });
 
-  syncProblemSubmissionStats();
+  await syncProblemSubmissionStats();
 
   logger.info(
     {
@@ -447,44 +457,48 @@ export function runSeed() {
         backend: BACKEND_PROBLEMS.length,
         frontend: FRONTEND_PROBLEMS.length,
         sql: SQL_PROBLEMS.length,
+        stdio: stdioProblems.length,
       },
     },
     'Seed complete',
   );
 }
 
-export function syncProblemSubmissionStats() {
-  db.exec(`
+export function syncProblemSubmissionStats(executor = db) {
+  return executor.exec(`
     UPDATE problems SET
       total_submissions = (
-        SELECT COUNT(*) FROM submissions s WHERE s.problem_id = problems.id
+        SELECT COUNT(*)::int FROM submissions s WHERE s.problem_id = problems.id
       ),
       accepted_submissions = (
-        SELECT COUNT(*) FROM submissions s WHERE s.problem_id = problems.id AND s.status = 'ACCEPTED'
-      );
+        SELECT COUNT(*)::int FROM submissions s WHERE s.problem_id = problems.id AND s.status = 'ACCEPTED'
+      )
   `);
 }
 
-export function removeSeededUsers() {
-  const placeholders = SEEDED_USERNAMES.map(() => '?').join(', ');
-  const rows = db.prepare(`
+export async function removeSeededUsers() {
+  const rows = await db.many(`
     SELECT id
     FROM users
-    WHERE username IN (${placeholders}) AND lower(email) LIKE ?
-  `).all(...SEEDED_USERNAMES, `%${SEEDED_EMAIL_SUFFIX}`);
+    WHERE username IN (${placeholders(1, SEEDED_USERNAMES.length)}) AND lower(email) LIKE $${SEEDED_USERNAMES.length + 1}
+  `, [...SEEDED_USERNAMES, `%${SEEDED_EMAIL_SUFFIX}`]);
 
   if (!rows.length) return 0;
 
-  const deleteUser = db.prepare(`DELETE FROM users WHERE id = ?`);
-  db.transaction(() => {
-    for (const row of rows) deleteUser.run(row.id);
-  })();
+  await withTransaction(async (tx) => {
+    for (const row of rows) {
+      await tx.none(`DELETE FROM users WHERE id = $1`, [row.id]);
+    }
+  });
 
-  syncProblemSubmissionStats();
+  await syncProblemSubmissionStats();
   return rows.length;
 }
 
 // Allow running as a CLI: `node src/shared/seed/index.js`
 if (process.argv[1] && process.argv[1] === fileURLToPath(import.meta.url)) {
-  runSeed();
+  runSeed().catch((error) => {
+    logger.error({ err: error }, 'Seed failed');
+    process.exit(1);
+  });
 }

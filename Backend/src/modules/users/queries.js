@@ -13,126 +13,163 @@ import { db } from '../../shared/db.js';
 
 /* ─── stats ─────────────────────────────────────────────────────────────── */
 
-export const getSiteStats = () =>
-  db.prepare(`
+export const getSiteStats = (executor = db) =>
+  executor.maybeOne(`
     SELECT
-      (SELECT COUNT(*) FROM users) AS total_users,
-      (SELECT COUNT(DISTINCT user_id) FROM submissions WHERE status = 'ACCEPTED') AS active_solvers
-  `).get();
+      (SELECT COUNT(*)::int FROM users) AS total_users,
+      (SELECT COUNT(DISTINCT user_id)::int FROM submissions WHERE status = 'ACCEPTED') AS active_solvers
+  `);
 
 /* ─── leaderboard ───────────────────────────────────────────────────────── */
 
-export const getLeaderboard = () =>
-  db.prepare(`
+export const getLeaderboard = (executor = db) =>
+  executor.many(`
     SELECT
       u.id, u.username, u.full_name, u.avatar_url, u.rating, u.created_at,
-      (SELECT COUNT(DISTINCT s.problem_id)
-         FROM submissions s
-        WHERE s.user_id = u.id AND s.status = 'ACCEPTED') AS solved
+      (
+        SELECT COUNT(DISTINCT s.problem_id)::int
+        FROM submissions s
+        WHERE s.user_id = u.id AND s.status = 'ACCEPTED'
+      ) AS solved
     FROM users u
     ORDER BY u.rating DESC, solved DESC, u.id ASC
     LIMIT 100
-  `).all();
+  `);
 
 /* ─── profile (read-only, used by /profile/:username) ───────────────────── */
 
-export const findUserByUsername = (username) =>
-  db.prepare(`SELECT * FROM users WHERE username = ?`).get(username);
+export const findUserByUsername = (username, executor = db) =>
+  executor.maybeOne(`SELECT * FROM users WHERE username = $1`, [username]);
 
-export const findUserById = (id) =>
-  db.prepare(`SELECT * FROM users WHERE id = ?`).get(id);
+export const findUserById = (id, executor = db) =>
+  executor.maybeOne(`SELECT * FROM users WHERE id = $1`, [id]);
 
-export const getSubmissionTotalsForUser = (userId) =>
-  db.prepare(`
+export const getSubmissionTotalsForUser = (userId, executor = db) =>
+  executor.maybeOne(`
     SELECT
-      COUNT(*) AS total,
-      SUM(CASE WHEN status = 'ACCEPTED' THEN 1 ELSE 0 END) AS accepted
-    FROM submissions WHERE user_id = ?
-  `).get(userId);
-
-export const getSolvedByDifficulty = (userId) =>
-  db.prepare(`
-    SELECT p.difficulty, COUNT(DISTINCT s.problem_id) AS solved
-    FROM submissions s JOIN problems p ON p.id = s.problem_id
-    WHERE s.user_id = ? AND s.status = 'ACCEPTED'
-    GROUP BY p.difficulty
-  `).all(userId);
-
-export const getTotalsByDifficulty = () =>
-  db.prepare(`
-    SELECT difficulty, COUNT(*) AS n FROM problems GROUP BY difficulty
-  `).all();
-
-export const getRecentSubmissionsBrief = (userId, limit) =>
-  db.prepare(`
-    SELECT s.id, s.status, s.created_at, p.slug AS problem_slug, p.title AS problem_title, p.difficulty
-    FROM submissions s JOIN problems p ON p.id = s.problem_id
-    WHERE s.user_id = ?
-    ORDER BY s.created_at DESC LIMIT ?
-  `).all(userId, limit);
-
-export const getActivityCalendar = (userId) =>
-  db.prepare(`
-    SELECT date(created_at) AS day, COUNT(*) AS n
+      COUNT(*)::int AS total,
+      COALESCE(SUM(CASE WHEN status = 'ACCEPTED' THEN 1 ELSE 0 END), 0)::int AS accepted
     FROM submissions
-    WHERE user_id = ? AND date(created_at) >= date('now', '-180 days')
-    GROUP BY day ORDER BY day ASC
-  `).all(userId);
+    WHERE user_id = $1
+  `, [userId]);
+
+export const getSolvedByDifficulty = (userId, executor = db) =>
+  executor.many(`
+    SELECT p.difficulty, COUNT(DISTINCT s.problem_id)::int AS solved
+    FROM submissions s
+    JOIN problems p ON p.id = s.problem_id
+    WHERE s.user_id = $1 AND s.status = 'ACCEPTED'
+    GROUP BY p.difficulty
+  `, [userId]);
+
+export const getTotalsByDifficulty = (executor = db) =>
+  executor.many(`
+    SELECT difficulty, COUNT(*)::int AS n
+    FROM problems
+    GROUP BY difficulty
+  `);
+
+export const getRecentSubmissionsBrief = (userId, limit, executor = db) =>
+  executor.many(`
+    SELECT s.id, s.status, s.created_at, p.slug AS problem_slug, p.title AS problem_title, p.difficulty
+    FROM submissions s
+    JOIN problems p ON p.id = s.problem_id
+    WHERE s.user_id = $1
+    ORDER BY s.created_at DESC
+    LIMIT $2
+  `, [userId, limit]);
+
+export const getActivityCalendar = (userId, executor = db) =>
+  executor.many(`
+    SELECT created_at::date::text AS day, COUNT(*)::int AS n
+    FROM submissions
+    WHERE user_id = $1 AND created_at::date >= CURRENT_DATE - 180
+    GROUP BY day
+    ORDER BY day ASC
+  `, [userId]);
 
 /* ─── dashboard (read-only) ─────────────────────────────────────────────── */
 
-export const getRecentSubmissionsDetailed = (userId, limit) =>
-  db.prepare(`
+export const getRecentSubmissionsDetailed = (userId, limit, executor = db) =>
+  executor.many(`
     SELECT s.id, s.status, s.created_at, s.runtime_ms, s.memory_kb, s.language,
            p.slug AS problem_slug, p.title AS problem_title, p.difficulty
-    FROM submissions s JOIN problems p ON p.id = s.problem_id
-    WHERE s.user_id = ?
-    ORDER BY s.created_at DESC LIMIT ?
-  `).all(userId, limit);
+    FROM submissions s
+    JOIN problems p ON p.id = s.problem_id
+    WHERE s.user_id = $1
+    ORDER BY s.created_at DESC
+    LIMIT $2
+  `, [userId, limit]);
 
-export const getRecommendedProblems = (userId, limit) =>
-  db.prepare(`
+export const getRecommendedProblems = (userId, limit, executor = db) =>
+  executor.many(`
     SELECT p.id, p.slug, p.title, p.difficulty, p.tags
     FROM problems p
     WHERE p.id NOT IN (
-      SELECT problem_id FROM submissions
-       WHERE user_id = ? AND status = 'ACCEPTED'
+      SELECT problem_id
+      FROM submissions
+      WHERE user_id = $1 AND status = 'ACCEPTED'
     )
     ORDER BY p.id ASC
-    LIMIT ?
-  `).all(userId, limit);
+    LIMIT $2
+  `, [userId, limit]);
 
-export const getAcceptedDays = (userId) =>
-  db.prepare(`
-    SELECT DISTINCT date(created_at) AS day
+export const getAcceptedDays = async (userId, executor = db) =>
+  (await executor.many(`
+    SELECT DISTINCT created_at::date::text AS day
     FROM submissions
-    WHERE user_id = ? AND status = 'ACCEPTED'
+    WHERE user_id = $1 AND status = 'ACCEPTED'
     ORDER BY day DESC
-  `).all(userId).map(r => r.day);
+  `, [userId])).map((row) => row.day);
 
 /* ─── favorites (read-only) ─────────────────────────────────────────────── */
 
-export const getFavoritesForUser = (userId) =>
-  db.prepare(`
+export const getFavoritesForUser = (userId, executor = db) =>
+  executor.many(`
     SELECT p.id, p.slug, p.title, p.difficulty, p.tags,
-           c.slug as category_slug, c.name as category_name
+           c.slug AS category_slug, c.name AS category_name
     FROM favorites f
     JOIN problems p ON p.id = f.problem_id
     LEFT JOIN categories c ON c.id = p.category_id
-    WHERE f.user_id = ?
+    WHERE f.user_id = $1
     ORDER BY f.created_at DESC
-  `).all(userId);
+  `, [userId]);
 
 /* ─── profile updates ───────────────────────────────────────────────────── */
 
-export function updateProfileColumns(userId, sets, args) {
-  // sets is an array of "col = ?" strings, args matches.
-  if (!sets.length) return;
-  sets.push(`updated_at = datetime('now')`);
-  args.push(userId);
-  db.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`).run(...args);
+export function updateProfileColumns(userId, updates, executor = db) {
+  if (!updates.length) return Promise.resolve();
+
+  const assignments = updates.map((update, index) => `${update.column} = $${index + 1}`);
+  assignments.push('updated_at = NOW()');
+
+  const values = updates.map((update) => update.value);
+  values.push(userId);
+
+  return executor.none(
+    `UPDATE users SET ${assignments.join(', ')} WHERE id = $${values.length}`,
+    values,
+  );
 }
 
-export function bumpRating(userId, delta) {
-  db.prepare(`UPDATE users SET rating = rating + ? WHERE id = ?`).run(delta, userId);
+export function bumpRating(userId, delta, executor = db) {
+  return executor.none(`UPDATE users SET rating = rating + $1 WHERE id = $2`, [delta, userId]);
 }
+
+/* ─── role management (ADR 0006) ────────────────────────────────────────── */
+
+export function updateRole(userId, role, executor = db) {
+  return executor.none(
+    `UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2`,
+    [role, userId],
+  );
+}
+
+/** Count of users currently holding the ADMIN role. Used by the
+ *  "cannot demote the last ADMIN" safeguard in users.service.setRole. */
+export const countAdmins = async (executor = db) => {
+  const row = await executor.maybeOne(
+    `SELECT COUNT(*)::int AS n FROM users WHERE role = 'ADMIN'`,
+  );
+  return row?.n ?? 0;
+};

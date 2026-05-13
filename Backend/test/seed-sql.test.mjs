@@ -55,6 +55,15 @@ const REF = {
   'sql-running-total':
     `SELECT title, posted, SUM(likes) OVER (ORDER BY posted, id) AS running_total
      FROM posts ORDER BY posted, id`,
+  'sql-order-status-summary':
+    `SELECT status, COUNT(*) AS order_count, SUM(total) AS total_amount
+     FROM orders GROUP BY status ORDER BY status`,
+  'sql-post-author-stats':
+    `SELECT u.username,
+       COUNT(p.id) AS post_count,
+       COALESCE(SUM(p.likes), 0) AS total_likes
+     FROM users u LEFT JOIN posts p ON p.user_id = u.id
+     GROUP BY u.id ORDER BY u.username`,
 };
 
 let okCount = 0, failCount = 0;

@@ -18,10 +18,12 @@ import { HttpError } from '../../../shared/errors.js';
 import { logger } from '../../../shared/logger.js';
 import { googleProvider } from './google.js';
 import { localProvider } from './local.js';
+import { microsoftProvider } from './microsoft.js';
 
 const ALL_PROVIDERS = {
   [localProvider.name]: localProvider,
   [googleProvider.name]: googleProvider,
+  [microsoftProvider.name]: microsoftProvider,
 };
 
 const REGISTERED = (process.env.AUTH_PROVIDERS || 'local,google')

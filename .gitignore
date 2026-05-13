@@ -23,6 +23,8 @@ logs/
 **/logs/
 *.log
 **/*.log
+backups/
+**/backups/
 
 # Node / frontend build output
 node_modules/

@@ -568,4 +568,69 @@ Order by \`posted\`, \`id\` ascending.`,
       },
     ],
   },
+
+  {
+    slug: 'sql-order-status-summary',
+    title: 'Order Status Summary',
+    difficulty: 'EASY',
+    category: 'sql',
+    tags: 'group by,aggregation',
+    description:
+`Return one row per order status with:
+
+* \`status\`
+* \`order_count\` — number of orders with that status
+* \`total_amount\` — sum of \`total\` for that status
+
+Order by \`status\` ascending.`,
+    examples: [],
+    constraints: '• Use GROUP BY status.',
+    hints: ['COUNT(*) and SUM(total) can be computed in the same GROUP BY query.'],
+    sqlSetup: SHOP_SCHEMA,
+    starterCode: { sql: 'SELECT status, COUNT(*) AS order_count, SUM(total) AS total_amount\nFROM orders\nGROUP BY status\nORDER BY status;\n' },
+    testCases: [
+      {
+        ordered: true,
+        expected: [
+          ['CANCELLED', 1,   25.5],
+          ['PAID',      6, 1595.0],
+          ['REFUNDED',  1,   75.0],
+        ],
+      },
+    ],
+  },
+
+  {
+    slug: 'sql-post-author-stats',
+    title: 'Post Stats Per Author',
+    difficulty: 'MEDIUM',
+    category: 'sql',
+    tags: 'left join,group by,coalesce',
+    description:
+`Return every user with their posting stats:
+
+* \`username\`
+* \`post_count\`
+* \`total_likes\`
+
+Users with no posts must still appear with \`0\` posts and \`0\` likes.
+Order by \`username\` ascending.`,
+    examples: [],
+    constraints: '• Use a LEFT JOIN from users to posts.',
+    hints: ['COUNT(posts.id) ignores NULL rows.', 'COALESCE(SUM(likes), 0) handles users without posts.'],
+    sqlSetup: BLOG_SCHEMA,
+    starterCode: { sql: 'SELECT u.username,\n       COUNT(p.id) AS post_count,\n       COALESCE(SUM(p.likes), 0) AS total_likes\nFROM users u\nLEFT JOIN posts p ON\nGROUP BY u.id\nORDER BY u.username;\n' },
+    testCases: [
+      {
+        ordered: true,
+        expected: [
+          ['alice', 2, 115],
+          ['bob',   1,   5],
+          ['carol', 2,  70],
+          ['dan',   1,  12],
+          ['erin',  0,   0],
+        ],
+      },
+    ],
+  },
 ];

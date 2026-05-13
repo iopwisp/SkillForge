@@ -26,3 +26,12 @@ Each file is `NNNN-short-kebab-title.md` and follows a lightweight structure:
   isolated runner for the JS judge
 - [0005](./0005-pluggable-auth-providers.md) — Pluggable auth providers
   (local + google now; Microsoft/OIDC/LDAP/SAML in Phase 2)
+- [0006](./0006-user-roles.md) — User roles for university model
+- [0007](./0007-courses-model.md) — Courses model and permissions
+- [0008](./0008-groups-and-enrolment.md) — Groups, enrolment, and narrowed visibility
+- [0009](./0009-exams.md) — Exams with windows and per-student attempts
+- [0010](./0010-gradebook-and-csv.md) — Gradebook and CSV export
+- [0011](./0011-instructor-problem-creator.md) — Instructor problem creator
+- [0012](./0012-audit-log.md) — Audit log for privileged mutations
+- [0013](./0013-async-judge-bullmq.md) — Async judge pipeline with BullMQ
+- [0014](./0014-polyglot-function-judge.md) — Python/Java/Go function judge

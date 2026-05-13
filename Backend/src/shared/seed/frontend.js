@@ -455,4 +455,119 @@ Original nodes must not be mutated.`,
         expected: [] },
     ],
   },
+
+  {
+    slug: 'class-names',
+    title: 'Compose CSS Class Names',
+    difficulty: 'EASY',
+    category: 'frontend',
+    tags: 'ui,strings,components',
+    description:
+`Implement \`classNames(...values)\`, a tiny helper for building a React
+\`className\` string.
+
+Accepted values:
+
+* strings — included when non-empty;
+* arrays — processed recursively;
+* objects — include the key when its value is truthy;
+* falsy values (\`false\`, \`null\`, \`undefined\`, \`0\`, \`""\`) are skipped.
+
+Return classes joined with a single space, preserving encounter order.`,
+    examples: [
+      { input: '"btn", { active: true, hidden: false }', output: '"btn active"' },
+      { input: '["p-2", ["text-sm"]], null, "rounded"', output: '"p-2 text-sm rounded"' },
+    ],
+    constraints: '• Inputs contain only strings, arrays, objects, and primitive falsy values.',
+    hints: ['Use a recursive helper that pushes tokens into one output array.'],
+    starterCode: {
+      javascript: `function classNames(...values) {\n  // your code here\n}\n`,
+      typescript: `function classNames(...values: any[]): string {\n  return '';\n}\n`,
+      python:
+`def classNames(*values):
+    return ""
+`,
+      java:
+`import java.util.*;
+
+class Solution {
+    public String classNames(Object... values) {
+        return "";
+    }
+}
+`,
+      go:
+`package main
+
+func classNames(values ...any) string {
+    return ""
+}
+`,
+    },
+    functionName: 'classNames',
+    testCases: [
+      { args: ['btn', 'primary'], expected: 'btn primary' },
+      { args: ['btn', { active: true, disabled: false }], expected: 'btn active' },
+      { args: [['p-2', ['text-sm']], null, undefined, 'rounded'], expected: 'p-2 text-sm rounded' },
+      { args: ['', false, 0, null], expected: '' },
+      { args: ['card', { selected: 1, hidden: 0 }, ['shadow', { dark: true }]], expected: 'card selected shadow dark' },
+    ],
+  },
+
+  {
+    slug: 'toggle-selection',
+    title: 'Toggle Selection State',
+    difficulty: 'EASY',
+    category: 'frontend',
+    tags: 'state,arrays,ui',
+    description:
+`Implement \`toggleSelection(selected, id, multi)\` for checkbox/list UI state.
+
+* \`selected\` is an array of ids.
+* In multi-select mode (\`multi === true\`), clicking an existing id removes it;
+  clicking a missing id appends it to the end.
+* In single-select mode, clicking a missing id returns \`[id]\`; clicking the
+  already selected id clears the selection.
+* Never mutate the input array.`,
+    examples: [
+      { input: '[1, 2], 3, true', output: '[1, 2, 3]' },
+      { input: '[1, 2], 2, true', output: '[1]' },
+      { input: '[1], 1, false', output: '[]' },
+    ],
+    constraints: '• ids are strings or numbers\n• selected.length ≤ 1000',
+    hints: ['Use includes to decide whether the id is currently selected.', 'Return new arrays with filter/spread.'],
+    starterCode: {
+      javascript: `function toggleSelection(selected, id, multi) {\n  // your code here\n}\n`,
+      typescript: `function toggleSelection<T>(selected: T[], id: T, multi: boolean): T[] {\n  return [];\n}\n`,
+      python:
+`def toggleSelection(selected, id, multi):
+    return []
+`,
+      java:
+`import java.util.*;
+
+class Solution {
+    public List<Object> toggleSelection(List<Object> selected, Object id, boolean multi) {
+        return new ArrayList<>();
+    }
+}
+`,
+      go:
+`package main
+
+func toggleSelection(selected []any, id any, multi bool) []any {
+    return []any{}
+}
+`,
+    },
+    functionName: 'toggleSelection',
+    testCases: [
+      { args: [[], 1, true], expected: [1] },
+      { args: [[1, 2], 3, true], expected: [1, 2, 3] },
+      { args: [[1, 2, 3], 2, true], expected: [1, 3] },
+      { args: [[1, 2], 3, false], expected: [3] },
+      { args: [[1], 1, false], expected: [] },
+      { args: [['a', 'b'], 'b', true], expected: ['a'] },
+    ],
+  },
 ];

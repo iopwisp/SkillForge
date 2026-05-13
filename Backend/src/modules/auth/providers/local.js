@@ -10,6 +10,7 @@
  * `register` is optional in the contract — only the local provider supports
  * self-service account creation. SSO providers won't have it.
  */
+import { withTransaction } from '../../../shared/db.js';
 import { HttpError } from '../../../shared/errors.js';
 import { defaultAvatar, hashPassword, verifyPassword } from '../lib.js';
 import * as q from '../queries.js';
@@ -26,17 +27,25 @@ export const localProvider = {
   /**
    * Create a new local account. Throws HttpError(409) on duplicate
    * username/email. Returns the freshly inserted user row.
+   *
+   * Wrapped in a transaction so the duplicate-check, the
+   * "is this the first user on a fresh install?" check (ADR 0006),
+   * and the INSERT all see a consistent snapshot.
    */
-  register({ username, email, password, fullName }) {
-    if (q.findUserByUsernameOrEmailExact(username, email)) {
-      throw new HttpError(409, 'Username or email already taken');
-    }
-    return q.insertLocalUser({
-      username,
-      email,
-      passwordHash: hashPassword(password),
-      fullName: fullName || username,
-      avatarUrl: defaultAvatar(username),
+  async register({ username, email, password, fullName }) {
+    return withTransaction(async (tx) => {
+      if (await q.findUserByUsernameOrEmailExact(username, email, tx)) {
+        throw new HttpError(409, 'Username or email already taken');
+      }
+      const role = (await q.isFirstUser(tx)) ? 'ADMIN' : 'STUDENT';
+      return q.insertLocalUser({
+        username,
+        email,
+        passwordHash: hashPassword(password),
+        fullName: fullName || username,
+        avatarUrl: defaultAvatar(username),
+        role,
+      }, tx);
     });
   },
 
@@ -46,8 +55,8 @@ export const localProvider = {
    * The error message is intentionally generic — we do not reveal whether
    * the username exists.
    */
-  authenticate({ emailOrUsername, password }) {
-    const user = q.findUserByEmailOrUsername(emailOrUsername);
+  async authenticate({ emailOrUsername, password }) {
+    const user = await q.findUserByEmailOrUsername(emailOrUsername);
     if (!user || !verifyPassword(password, user.password_hash)) {
       throw new HttpError(401, 'Invalid credentials');
     }

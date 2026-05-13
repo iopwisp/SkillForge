@@ -1,7 +1,10 @@
-import { useEffect } from "react";
-import { Navigate, useLocation } from "react-router";
+import { Navigate, useLocation, Link } from "react-router";
+import { ShieldAlert } from "lucide-react";
 import { useAuth } from "./auth";
 import { Logo } from "~/components/brand/Logo";
+import type { Role } from "./types";
+import { Empty } from "~/components/common/Empty";
+import { Button } from "~/components/ui/button";
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -12,6 +15,54 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return <Navigate to={`/login?next=${next}`} replace />;
   }
   return <>{children}</>;
+}
+
+/**
+ * Wraps a tree behind both auth AND a role check. The check mirrors the
+ * server-side `requireRole(...allowed)` middleware so unauthorised users
+ * see a friendly "no access" page instead of a confusing 403 from a
+ * subsequent API call.
+ *
+ * Backend is still the source of truth — this guard exists for UX only.
+ */
+export function RoleGuard({
+  allowed,
+  children,
+}: {
+  allowed: Role[];
+  children: React.ReactNode;
+}) {
+  return (
+    <ProtectedRoute>
+      <RoleGuardInner allowed={allowed}>{children}</RoleGuardInner>
+    </ProtectedRoute>
+  );
+}
+
+function RoleGuardInner({ allowed, children }: { allowed: Role[]; children: React.ReactNode }) {
+  const { user } = useAuth();
+  if (!user) return null;
+  if (!allowed.includes(user.role)) return <NoAccess allowed={allowed} />;
+  return <>{children}</>;
+}
+
+function NoAccess({ allowed }: { allowed: Role[] }) {
+  return (
+    <div className="px-4 sm:px-6 lg:px-8 py-10">
+      <Empty
+        icon={ShieldAlert}
+        title="You don't have access to this page"
+        description={
+          <>
+            This area is reserved for{" "}
+            <span className="font-medium">{allowed.join(" / ")}</span>. If you believe this is a
+            mistake, ask an admin to grant you the correct role.
+          </>
+        }
+        action={<Button asChild><Link to="/dashboard">Back to dashboard</Link></Button>}
+      />
+    </div>
+  );
 }
 
 export function Loading() {

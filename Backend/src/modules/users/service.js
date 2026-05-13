@@ -6,19 +6,21 @@
  *     Auth module owns the credentials side of the user record; users module
  *     owns profile fields.
  */
+import { withTransaction } from '../../shared/db.js';
 import { HttpError } from '../../shared/errors.js';
+import * as audit from '../audit/service.js';
 import * as authSvc from '../auth/service.js';
 import * as q from './queries.js';
 
 /* ─── stats / leaderboard ───────────────────────────────────────────────── */
 
-export function getSiteStats() {
-  const s = q.getSiteStats();
+export async function getSiteStats() {
+  const s = await q.getSiteStats();
   return { totalUsers: s.total_users, activeSolvers: s.active_solvers };
 }
 
-export function getLeaderboard() {
-  return q.getLeaderboard().map((r, i) => ({
+export async function getLeaderboard() {
+  return (await q.getLeaderboard()).map((r, i) => ({
     rank: i + 1,
     id: r.id,
     username: r.username,
@@ -32,15 +34,17 @@ export function getLeaderboard() {
 
 /* ─── public profile ────────────────────────────────────────────────────── */
 
-export function getPublicProfile(username) {
-  const u = q.findUserByUsername(username);
+export async function getPublicProfile(username) {
+  const u = await q.findUserByUsername(username);
   if (!u) throw new HttpError(404, 'User not found');
 
-  const totals = q.getSubmissionTotalsForUser(u.id);
-  const solvedByDiff = q.getSolvedByDifficulty(u.id);
-  const totalsByDiff = q.getTotalsByDifficulty();
-  const recent = q.getRecentSubmissionsBrief(u.id, 10);
-  const calendar = q.getActivityCalendar(u.id);
+  const [totals, solvedByDiff, totalsByDiff, recent, calendar] = await Promise.all([
+    q.getSubmissionTotalsForUser(u.id),
+    q.getSolvedByDifficulty(u.id),
+    q.getTotalsByDifficulty(),
+    q.getRecentSubmissionsBrief(u.id, 10),
+    q.getActivityCalendar(u.id),
+  ]);
 
   return {
     user: authSvc.publicUser(u),
@@ -68,14 +72,16 @@ export function getPublicProfile(username) {
 
 /* ─── dashboard ─────────────────────────────────────────────────────────── */
 
-export function getDashboard(user) {
+export async function getDashboard(user) {
   const userId = user.id;
-  const totals = q.getSubmissionTotalsForUser(userId);
-  const solvedByDiff = q.getSolvedByDifficulty(userId);
-  const totalsByDiff = q.getTotalsByDifficulty();
-  const recent = q.getRecentSubmissionsDetailed(userId, 8);
-  const recommended = q.getRecommendedProblems(userId, 5);
-  const days = q.getAcceptedDays(userId);
+  const [totals, solvedByDiff, totalsByDiff, recent, recommended, days] = await Promise.all([
+    q.getSubmissionTotalsForUser(userId),
+    q.getSolvedByDifficulty(userId),
+    q.getTotalsByDifficulty(),
+    q.getRecentSubmissionsDetailed(userId, 8),
+    q.getRecommendedProblems(userId, 5),
+    q.getAcceptedDays(userId),
+  ]);
 
   return {
     totals: {
@@ -137,8 +143,8 @@ function computeStreak(daysDesc) {
 
 /* ─── favorites ─────────────────────────────────────────────────────────── */
 
-export function getFavorites(userId) {
-  return q.getFavoritesForUser(userId).map((r) => ({
+export async function getFavorites(userId) {
+  return (await q.getFavoritesForUser(userId)).map((r) => ({
     id: r.id,
     slug: r.slug,
     title: r.title,
@@ -159,36 +165,88 @@ const PROFILE_COLUMN_MAP = {
   theme: 'theme',
 };
 
-export function updateProfile(user, fields) {
-  const sets = [];
-  const args = [];
+export async function updateProfile(user, fields) {
+  const updates = [];
   for (const [key, value] of Object.entries(fields)) {
     if (value === undefined) continue;
-    sets.push(`${PROFILE_COLUMN_MAP[key]} = ?`);
-    args.push(value === '' ? null : value);
+    updates.push({
+      column: PROFILE_COLUMN_MAP[key],
+      value: value === '' ? null : value,
+    });
   }
-  q.updateProfileColumns(user.id, sets, args);
-  return authSvc.publicUser(q.findUserById(user.id));
+  await q.updateProfileColumns(user.id, updates);
+  return authSvc.publicUser(await q.findUserById(user.id));
 }
 
 /* ─── password change ───────────────────────────────────────────────────── */
 
-export function changePassword(user, { currentPassword, newPassword }) {
+export async function changePassword(user, { currentPassword, newPassword }) {
   if (!user.password_hash) {
     throw new HttpError(400, 'This account uses Google OAuth and has no password set.');
   }
   if (!authSvc.verifyPassword(currentPassword, user.password_hash)) {
     throw new HttpError(400, 'Current password is incorrect');
   }
-  authSvc.setPasswordHash(user.id, authSvc.hashPassword(newPassword));
-  authSvc.revokeAllForUser(user.id);
+  await authSvc.setPasswordHash(user.id, authSvc.hashPassword(newPassword));
+  await authSvc.revokeAllForUser(user.id);
 }
 
 /* ─── rating ────────────────────────────────────────────────────────────── */
 
 /** Awarded by the submissions module on a first-time accepted solve. */
-export function bumpRating(userId, delta) {
-  q.bumpRating(userId, delta);
+export function bumpRating(userId, delta, { db: executor } = {}) {
+  return q.bumpRating(userId, delta, executor);
+}
+
+/* ─── role management (ADR 0006) ────────────────────────────────────────── */
+
+/**
+ * Set a user's role to one of STUDENT / INSTRUCTOR / ADMIN. The caller
+ * (route layer) is responsible for ensuring the request comes from an
+ * ADMIN — this service does not re-check that.
+ *
+ * Safeguard: the installation must always have at least one ADMIN.
+ * If the operation would leave zero admins (i.e. the target is currently
+ * ADMIN, the new role is not ADMIN, and there is no other ADMIN), the
+ * call throws HttpError(400). This applies whether the admin is
+ * demoting themselves or demoting another lone admin.
+ *
+ * Idempotent: setting the role to the value the user already holds is
+ * a no-op and returns the public user shape unchanged.
+ *
+ * Returns the public-shaped user row after the update.
+ */
+export async function setRole(actor, targetUserId, newRole) {
+  return withTransaction(async (tx) => {
+    const target = await q.findUserById(targetUserId, tx);
+    if (!target) throw new HttpError(404, 'User not found');
+
+    if (target.role === newRole) {
+      return authSvc.publicUser(target);
+    }
+
+    if (target.role === 'ADMIN' && newRole !== 'ADMIN') {
+      const admins = await q.countAdmins(tx);
+      if (admins <= 1) {
+        throw new HttpError(400, 'Cannot remove the last ADMIN');
+      }
+    }
+
+    await q.updateRole(targetUserId, newRole, tx);
+    const updated = await q.findUserById(targetUserId, tx);
+    await audit.recordEvent(actor, {
+      action: 'SET_ROLE',
+      entityType: 'USER_ROLE',
+      entityKey: target.username,
+      details: {
+        targetUserId,
+        targetUsername: target.username,
+        previousRole: target.role,
+        newRole,
+      },
+    }, { db: tx });
+    return authSvc.publicUser(updated);
+  });
 }
 
 /* ─── helpers ───────────────────────────────────────────────────────────── */

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
-import { MapPin, Globe, CalendarDays } from "lucide-react";
+import { MapPin, Globe, CalendarDays, Trophy } from "lucide-react";
 import { api } from "~/lib/api";
 import { Loading } from "~/lib/guards";
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
@@ -67,6 +67,14 @@ export default function ProfilePage() {
             <Stat label="Submissions" value={stats.totalSubmissions} />
             <Stat label="Acceptance" value={`${stats.acceptanceRate}%`} />
             <Stat label="Rating" value={user.rating} accent />
+          </div>
+          <div className="mt-3">
+            <Link
+              to={`/u/${user.username}/contests`}
+              className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline"
+            >
+              <Trophy className="size-4" /> View contest history
+            </Link>
           </div>
         </div>
       </div>

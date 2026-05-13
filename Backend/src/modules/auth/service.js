@@ -28,7 +28,7 @@ import { getProviderOrThrow, listProviders } from './providers/index.js';
 import * as q from './queries.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'skillforge-dev-secret-change-me';
-const ACCESS_TTL = parseInt(process.env.JWT_ACCESS_TTL || '900', 10);     // 15 min
+const ACCESS_TTL = parseInt(process.env.JWT_ACCESS_TTL || '900', 10); // 15 min
 const REFRESH_TTL = parseInt(process.env.JWT_REFRESH_TTL || '2592000', 10); // 30 days
 
 /* ─── password helpers (re-exported for users.service password change) ── */
@@ -41,19 +41,22 @@ export function signAccessToken(user) {
   return jwt.sign(
     { sub: user.id, username: user.username, email: user.email, role: user.role },
     JWT_SECRET,
-    { expiresIn: ACCESS_TTL }
+    { expiresIn: ACCESS_TTL },
   );
 }
 
 export function verifyAccessToken(token) {
-  try { return jwt.verify(token, JWT_SECRET); }
-  catch { return null; }
+  try {
+    return jwt.verify(token, JWT_SECRET);
+  } catch {
+    return null;
+  }
 }
 
-function issueRefreshToken(userId) {
+async function issueRefreshToken(userId) {
   const token = crypto.randomBytes(48).toString('base64url');
   const expiresAt = new Date(Date.now() + REFRESH_TTL * 1000).toISOString();
-  q.insertRefreshToken({ userId, token, expiresAt });
+  await q.insertRefreshToken({ userId, token, expiresAt });
   return token;
 }
 
@@ -78,10 +81,10 @@ export function publicUser(u) {
 }
 
 /** Wrap a user row into a standard login/register/refresh response. */
-export function buildAuthResponse(user) {
+export async function buildAuthResponse(user) {
   return {
     accessToken: signAccessToken(user),
-    refreshToken: issueRefreshToken(user.id),
+    refreshToken: await issueRefreshToken(user.id),
     tokenType: 'Bearer',
     expiresIn: ACCESS_TTL,
     user: publicUser(user),
@@ -90,44 +93,44 @@ export function buildAuthResponse(user) {
 
 /* ─── register / login / refresh / logout (route-shaped facades) ────────── */
 
-export function register(data) {
+export async function register(data) {
   const provider = getProviderOrThrow('local');
   if (typeof provider.register !== 'function') {
     throw new HttpError(400, 'Local registration is disabled on this deployment');
   }
-  return buildAuthResponse(provider.register(data));
+  return buildAuthResponse(await provider.register(data));
 }
 
-export function login(data) {
+export async function login(data) {
   const provider = getProviderOrThrow('local');
-  return buildAuthResponse(provider.authenticate(data));
+  return buildAuthResponse(await provider.authenticate(data));
 }
 
-export function refresh(refreshToken) {
+export async function refresh(refreshToken) {
   if (!refreshToken) throw new HttpError(400, 'refreshToken is required');
-  const row = q.findActiveRefreshToken(refreshToken);
+  const row = await q.findActiveRefreshToken(refreshToken);
   if (!row) throw new HttpError(401, 'Invalid or expired refresh token');
   if (new Date(row.expires_at) < new Date()) {
     throw new HttpError(401, 'Invalid or expired refresh token');
   }
-  q.revokeRefreshTokenById(row.id);
-  const user = q.findUserById(row.user_id);
+  await q.revokeRefreshTokenById(row.id);
+  const user = await q.findUserById(row.user_id);
   if (!user) throw new HttpError(401, 'Invalid or expired refresh token');
   return buildAuthResponse(user);
 }
 
-export function logout(refreshToken) {
-  if (refreshToken) q.revokeRefreshTokenByValue(refreshToken);
+export async function logout(refreshToken) {
+  if (refreshToken) await q.revokeRefreshTokenByValue(refreshToken);
 }
 
 /** Revoke all sessions, called when the password changes. */
 export function revokeAllForUser(userId) {
-  q.revokeAllRefreshTokensForUser(userId);
+  return q.revokeAllRefreshTokensForUser(userId);
 }
 
 /** Set a new password hash for a user. Used by users.service.changePassword. */
 export function setPasswordHash(userId, hash) {
-  q.updatePassword(userId, hash);
+  return q.updatePassword(userId, hash);
 }
 
 /* ─── provider-aware wrappers used by routes ────────────────────────────── */
@@ -138,7 +141,7 @@ export function getProviderList() {
 }
 
 /** Build the OAuth consent-screen redirect URL for the given provider. */
-export function buildOAuthAuthUrl(providerName, opts = {}) {
+export async function buildOAuthAuthUrl(providerName, opts = {}) {
   const provider = getProviderOrThrow(providerName);
   if (typeof provider.buildAuthUrl !== 'function') {
     throw new HttpError(400, `Provider "${providerName}" does not support redirect-based auth`);
@@ -158,7 +161,7 @@ export async function completeOAuthRedirect(providerName, query) {
   }
   const result = await provider.completeAuth(query);
   if (result.user) {
-    return { auth: buildAuthResponse(result.user), frontend: result.frontend };
+    return { auth: await buildAuthResponse(result.user), frontend: result.frontend };
   }
   return { error: result.error, frontend: result.frontend };
 }

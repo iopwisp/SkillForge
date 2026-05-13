@@ -129,6 +129,29 @@ function resolveRedirect(redirects, start) {
   }
   return cur;
 }`,
+  'public-user-profile': `
+function publicUser(user) {
+  return {
+    id: user.id,
+    username: user.username,
+    fullName: user.fullName ?? null,
+    avatarUrl: user.avatarUrl ?? null,
+  };
+}`,
+  'normalize-pagination-query': `
+function normalizePagination(query) {
+  function intValue(value, fallback) {
+    if (value === null || value === undefined) return fallback;
+    const s = String(value).trim();
+    if (!/^\\d+$/.test(s)) return fallback;
+    const n = Number(s);
+    return n > 0 ? n : fallback;
+  }
+  const page = intValue(query.page, 1);
+  const rawPageSize = intValue(query.pageSize, 20);
+  const pageSize = Math.min(100, rawPageSize);
+  return { page, pageSize, offset: (page - 1) * pageSize };
+}`,
 };
 
 let okCount = 0, failCount = 0;

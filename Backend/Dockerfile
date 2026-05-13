@@ -24,6 +24,7 @@ WORKDIR /app
 
 # We do NOT install the build toolchain in the runtime image. Native modules
 # bring their compiled .node binaries from the build stage.
+RUN apk add --no-cache docker-cli
 
 COPY --from=build /app /app
 

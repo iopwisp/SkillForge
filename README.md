@@ -11,7 +11,7 @@ progress, climb the leaderboard, and ship like a pro. 🐘
 - 🟦 **Google OAuth** — server-side flow, auto-creates users, links existing accounts
 - 🧩 **58 seeded problems** across 14 categories — 24 algorithm + 10 backend + 10 frontend + 14 SQL
 - ⚖️ **Real judges** — SQL queries run against an in-memory SQLite, JS solutions
-  execute in a Node `vm` sandbox with hard timeouts. Wrong answers get a real
+  execute in `isolated-vm` with hard timeouts. Wrong answers get a real
   `Expected vs Actual` diff, infinite loops get TLE, missing functions get
   COMPILE_ERROR.
 - 🚀 **Dashboard, problems list, problem-detail workspace** with type filter
@@ -27,13 +27,14 @@ progress, climb the leaderboard, and ship like a pro. 🐘
 | Layer    | Tech                                                                |
 | -------- | ------------------------------------------------------------------- |
 | Frontend | React 19, React Router 7 (SPA), Tailwind v4, shadcn/ui, lucide-react|
-| Backend  | Node 20+, Express 4, SQLite (`better-sqlite3`), Zod, JWT, bcryptjs  |
+| Backend  | Node 20+, Express 4, PostgreSQL (`pg`), Zod, JWT, bcryptjs          |
 | OAuth    | Google OAuth 2.0 (manual implementation, zero deps)                 |
-| Database | SQLite (file: `Backend/data/skillforge.db`)                         |
+| Database | PostgreSQL 16+ (via `DATABASE_URL`)                                 |
 
 ## 🚀 Quick start (Windows, macOS, Linux)
 
-You need **Node.js 20+** installed. Nothing else.
+You need **Node.js 20+** and **PostgreSQL 16+** installed for local bare-metal
+development. If you prefer containers, use the Docker Compose stack below.
 
 ### 1. Backend — `http://localhost:4000`
 
@@ -43,7 +44,11 @@ npm install
 npm start
 ```
 
-On first start, it auto-creates `data/skillforge.db` and seeds it with **58 problems across 14 categories** (24 algorithm + 10 backend + 10 frontend + 14 SQL). You should see:
+Before first boot, create a local PostgreSQL database and point `Backend/.env`
+at it via `DATABASE_URL` (default example: `postgresql://postgres:postgres@127.0.0.1:5432/skillforge`).
+
+On first start, the backend applies SQL migrations, then seeds the catalog with
+**58 problems across 14 categories** (24 algorithm + 10 backend + 10 frontend + 14 SQL). You should see:
 
 ```
 ⚒️ SkillForge backend running at http://localhost:4000
@@ -66,6 +71,40 @@ npm run dev
 ```
 
 Open **http://localhost:5173** in your browser. ✨
+
+### Optional: Docker Compose stack (`Backend` + PostgreSQL)
+
+```bash
+cd Backend
+cp .env.example .env
+docker compose up --build -d
+docker compose logs -f backend
+```
+
+This starts:
+- `postgres` on `localhost:${POSTGRES_PORT:-5432}` with a named data volume
+- `backend` on `http://localhost:${PORT:-4000}`
+
+Compose reads `Backend/.env`, but the backend container automatically overrides
+`DATABASE_URL` to use the internal hostname `postgres` instead of `127.0.0.1`.
+
+### PostgreSQL backups (`pg_dump`)
+
+With the Compose stack running:
+
+```bash
+cd Backend
+./scripts/backup-postgres.sh
+```
+
+On Windows PowerShell:
+
+```powershell
+cd Backend
+.\scripts\backup-postgres.ps1
+```
+
+Both commands write timestamped custom-format dumps to `Backend/backups/`.
 
 ### Optional: production build of the frontend
 
@@ -150,7 +189,7 @@ affect rating.
 Each set lives in its own file so it's trivial to extend:
 
 ```
-Backend/src/seeds/
+Backend/src/shared/seed/
 ├── backend.js   ← BACKEND_PROBLEMS array
 ├── frontend.js  ← FRONTEND_PROBLEMS array
 └── sql.js       ← SQL_PROBLEMS array (with shared SHOP/HR/BLOG schemas)
@@ -167,6 +206,7 @@ All routes are under `/api`. Auth endpoints are rate-limited.
 | Method | Path                              | Auth | Description                    |
 | ------ | --------------------------------- | ---- | ------------------------------ |
 | GET    | `/health`                         | —    | Health check                   |
+| GET    | `/audit-log`                      | ✅*  | Installation audit log (`ADMIN`) |
 | POST   | `/auth/register`                  | —    | Create account                 |
 | POST   | `/auth/login`                     | —    | Email/username + password      |
 | POST   | `/auth/refresh`                   | —    | Rotate refresh token           |
@@ -177,7 +217,11 @@ All routes are under `/api`. Auth endpoints are rate-limited.
 | POST   | `/auth/google/exchange`           | —    | (alt) SPA-side code exchange   |
 | GET    | `/categories`                     | —    | All categories                 |
 | GET    | `/problems`                       | opt  | Filter/search problems         |
+| POST   | `/problems`                       | ✅*  | Create a problem (`INSTRUCTOR`/`ADMIN`) |
 | GET    | `/problems/:slug`                 | opt  | Problem with description       |
+| GET    | `/problems/:slug/edit`            | ✅*  | Authoring payload (`INSTRUCTOR`/`ADMIN`) |
+| PUT    | `/problems/:slug`                 | ✅*  | Update a problem (`INSTRUCTOR`/`ADMIN`) |
+| DELETE | `/problems/:slug`                 | ✅*  | Delete an unused problem (`INSTRUCTOR`/`ADMIN`) |
 | POST   | `/problems/:slug/favorite`        | ✅   | Toggle favourite               |
 | POST   | `/submissions/:slug`              | ✅   | Submit code                    |
 | POST   | `/submissions/:slug/run`          | ✅   | Run sample tests only          |
@@ -191,6 +235,8 @@ All routes are under `/api`. Auth endpoints are rate-limited.
 | PATCH  | `/users/me`                       | ✅   | Update profile                 |
 | POST   | `/users/me/password`              | ✅   | Change password                |
 
+\* `✅*` means the route additionally requires role `INSTRUCTOR` or `ADMIN`.
+
 ## ⚙️ Environment variables
 
 Copy `.env.example` → `.env` in each side and tweak as needed:
@@ -199,7 +245,11 @@ Copy `.env.example` → `.env` in each side and tweak as needed:
 | Var | Default | Purpose |
 | --- | --- | --- |
 | `PORT` | `4000` | API listen port |
-| `DATABASE_FILE` | `./data/skillforge.db` | SQLite path |
+| `DATABASE_URL` | `postgresql://postgres:postgres@127.0.0.1:5432/skillforge` | PostgreSQL DSN |
+| `POSTGRES_DB` | `skillforge` | Compose / backup database name |
+| `POSTGRES_USER` | `postgres` | Compose / backup database user |
+| `POSTGRES_PASSWORD` | `postgres` | Compose / backup database password |
+| `POSTGRES_PORT` | `5432` | Host port exposed by `docker-compose.yml` |
 | `JWT_SECRET` | _(change me)_ | Signing key for access tokens |
 | `JWT_ACCESS_TTL` | `900` | Access token lifetime (s) |
 | `JWT_REFRESH_TTL` | `2592000` | Refresh token lifetime (s) |
@@ -218,26 +268,25 @@ Copy `.env.example` → `.env` in each side and tweak as needed:
 
 ```
 SkillForge/
-├── Backend/                     ← Node + SQLite backend
+├── Backend/                     ← Node + PostgreSQL backend
 │   ├── src/
 │   │   ├── index.js             server bootstrap
-│   │   ├── db.js                SQLite schema + connection + auto-migrations
-│   │   ├── auth.js              JWT + bcrypt helpers, middleware
-│   │   ├── judge.js             real SQL & JS judges (sandboxed, with diff)
-│   │   ├── seed.js              24 algorithm problems, 14 categories
-│   │   ├── seeds/
-│   │   │   ├── backend.js       10 backend tasks (HTTP/JSON/parsing helpers)
-│   │   │   ├── frontend.js      10 frontend tasks (formatters, trees, UI)
-│   │   │   └── sql.js           14 SQL tasks (joins, GROUP BY, window funcs)
-│   │   └── routes/
-│   │       ├── auth.js          register, login, refresh, /me, Google OAuth
-│   │       ├── problems.js      list, detail, favourites (filter by type)
-│   │       ├── categories.js
-│   │       ├── submissions.js   submit, run, history (real judges)
-│   │       └── users.js         profile, dashboard, leaderboard, settings
+│   │   ├── shared/
+│   │   │   ├── db.js            pg pool + query helpers + transactions
+│   │   │   ├── migrations.js    startup migration runner
+│   │   │   └── seed/            seeded catalog + bootstrap helpers
+│   │   └── modules/
+│   │       ├── auth/            register, login, refresh, /me, Google OAuth
+│   │       ├── problems/        list, detail, favourites (filter by type)
+│   │       ├── categories/
+│   │       ├── submissions/     submit, run, history (real judges)
+│   │       └── users/           profile, dashboard, leaderboard, settings
+│   ├── db/
+│   │   └── migrations/          forward-only SQL migrations
+│   ├── scripts/                 ops helpers (e.g. pg_dump backups)
 │   ├── test/                    judge + reference-solution tests (npm test)
-│   ├── data/                    created on first boot (SQLite WAL files)
 │   ├── Dockerfile
+│   ├── docker-compose.yml
 │   ├── package.json
 │   └── .env / .env.example
 │
@@ -299,8 +348,9 @@ A Playwright-based smoke test was used during development:
 
 ```bash
 cd Backend
-rm -rf data/
-npm start    # auto-seeds again
+dropdb skillforge
+createdb skillforge
+npm start    # re-runs migrations + auto-seeds again
 ```
 
 ## 🛣 Roadmap
@@ -310,7 +360,6 @@ The project is being evolved into a B2B coding-practice platform for universitie
 
 - Modular monolith boundaries (`auth`, `problems`, `submissions`, `users`,
   `courses`, `assessments`)
-- Migration SQLite → PostgreSQL with versioned migrations
 - Replace `vm`-based JS judge with a real isolated runner (`isolated-vm` /
   Docker-per-submission)
 - Pluggable auth providers (local + Google + OIDC/Microsoft 365 + LDAP)

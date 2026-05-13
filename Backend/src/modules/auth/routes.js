@@ -28,26 +28,26 @@ const router = Router();
 
 /* ── local (password) routes ────────────────────────────────────────────── */
 
-router.post('/register', (req, res) => {
+router.post('/register', asyncHandler(async (req, res) => {
   const parsed = RegisterSchema.safeParse(req.body);
   if (!parsed.success) throw fromZod(parsed.error);
-  res.status(201).json(auth.register(parsed.data));
-});
+  res.status(201).json(await auth.register(parsed.data));
+}));
 
-router.post('/login', (req, res) => {
+router.post('/login', asyncHandler(async (req, res) => {
   const parsed = LoginSchema.safeParse(req.body);
   if (!parsed.success) throw fromZod(parsed.error);
-  res.json(auth.login(parsed.data));
-});
+  res.json(await auth.login(parsed.data));
+}));
 
-router.post('/refresh', (req, res) => {
-  res.json(auth.refresh(req.body?.refreshToken));
-});
+router.post('/refresh', asyncHandler(async (req, res) => {
+  res.json(await auth.refresh(req.body?.refreshToken));
+}));
 
-router.post('/logout', (req, res) => {
-  auth.logout(req.body?.refreshToken);
+router.post('/logout', asyncHandler(async (req, res) => {
+  await auth.logout(req.body?.refreshToken);
   res.json({ ok: true });
-});
+}));
 
 router.get('/me', requireAuth, (req, res) => {
   res.json(auth.publicUser(req.user));
@@ -61,13 +61,13 @@ router.get('/providers', (_req, res) => {
 
 /* ── google (kept for backward compatibility with the SPA + Google console) ─ */
 
-router.get('/google', (req, res) => {
-  res.redirect(auth.buildOAuthAuthUrl('google', { next: req.query.next }));
-});
+router.get('/google', asyncHandler(async (req, res) => {
+  res.redirect(await auth.buildOAuthAuthUrl('google', { next: req.query.next }));
+}));
 
-router.get('/google/url', (req, res) => {
-  res.json({ url: auth.buildOAuthAuthUrl('google', { next: req.query.next }) });
-});
+router.get('/google/url', asyncHandler(async (req, res) => {
+  res.json({ url: await auth.buildOAuthAuthUrl('google', { next: req.query.next }) });
+}));
 
 router.get('/google/callback', asyncHandler(async (req, res) => {
   await handleOAuthCallback('google', req, res);
@@ -79,13 +79,13 @@ router.post('/google/exchange', asyncHandler(async (req, res) => {
 
 /* ── generic OAuth routes (Microsoft 365 / OIDC will use these) ─────────── */
 
-router.get('/oauth/:provider', (req, res) => {
-  res.redirect(auth.buildOAuthAuthUrl(req.params.provider, { next: req.query.next }));
-});
+router.get('/oauth/:provider', asyncHandler(async (req, res) => {
+  res.redirect(await auth.buildOAuthAuthUrl(req.params.provider, { next: req.query.next }));
+}));
 
-router.get('/oauth/:provider/url', (req, res) => {
-  res.json({ url: auth.buildOAuthAuthUrl(req.params.provider, { next: req.query.next }) });
-});
+router.get('/oauth/:provider/url', asyncHandler(async (req, res) => {
+  res.json({ url: await auth.buildOAuthAuthUrl(req.params.provider, { next: req.query.next }) });
+}));
 
 router.get('/oauth/:provider/callback', asyncHandler(async (req, res) => {
   await handleOAuthCallback(req.params.provider, req, res);

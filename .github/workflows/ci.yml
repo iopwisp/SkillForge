@@ -14,6 +14,20 @@ jobs:
   backend:
     name: Backend (lint + tests)
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: skillforge_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d skillforge_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     defaults:
       run:
         working-directory: Backend
@@ -38,6 +52,7 @@ jobs:
         env:
           NODE_ENV: test
           JWT_SECRET: ci-jwt-secret-not-used-in-prod-just-for-tests
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/skillforge_test
 
   frontend:
     name: Frontend (typecheck + build)

@@ -3,12 +3,13 @@
  */
 import { Router } from 'express';
 
+import { asyncHandler } from '../../shared/errors.js';
 import * as categories from './service.js';
 
 const router = Router();
 
-router.get('/', (_req, res) => {
-  res.json(categories.list());
-});
+router.get('/', asyncHandler(async (_req, res) => {
+  res.json(await categories.list());
+}));
 
 export default router;

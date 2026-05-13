@@ -1,11 +1,13 @@
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import {
   LayoutDashboard, ListChecks, FolderTree, Trophy, ScrollText, Star, Settings,
-  LogOut, Menu, X, Sun, Moon, Search, Sparkles,
+  LogOut, Menu, X, Sun, Moon, Search, Sparkles, GraduationCap, BookOpen,
+  PenSquare, ShieldCheck, FileClock, Swords,
 } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "~/lib/auth";
 import { useTheme } from "~/lib/theme";
+import { canTeach, isAdmin, ROLE_LABEL } from "~/lib/types";
 import { Logo } from "~/components/brand/Logo";
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
 import { Button } from "~/components/ui/button";
@@ -17,6 +19,8 @@ import {
 
 const NAV = [
   { to: "/dashboard",   label: "Dashboard",  icon: LayoutDashboard },
+  { to: "/courses",     label: "Courses",    icon: BookOpen },
+  { to: "/contests",    label: "Contests",   icon: Swords },
   { to: "/problems",    label: "Problems",   icon: ListChecks },
   { to: "/categories",  label: "Categories", icon: FolderTree },
   { to: "/leaderboard", label: "Leaderboard", icon: Trophy },
@@ -24,12 +28,24 @@ const NAV = [
   { to: "/favorites",   label: "Favorites",  icon: Star },
 ];
 
+const TEACH_NAV = [
+  { to: "/teach/courses",  label: "Courses",  icon: BookOpen },
+  { to: "/teach/problems", label: "Problems", icon: PenSquare },
+];
+
+const ADMIN_NAV = [
+  { to: "/admin/audit-log", label: "Audit log", icon: FileClock },
+];
+
 export default function AppShell() {
   const [open, setOpen] = useState(false);
   const location = useLocation();
 
-  // Hide chrome on the problem-solving page (full-screen workspace)
-  const minimal = /^\/problems\/[^/]+\/?$/.test(location.pathname);
+  // Hide chrome on full-screen workspace pages (problem detail, exam workspace,
+  // contest problem workspace).
+  const minimal = /^\/problems\/[^/]+\/?$/.test(location.pathname)
+    || /^\/courses\/[^/]+\/exams\/[^/]+\/?$/.test(location.pathname)
+    || /^\/contests\/[^/]+\/problems\/[^/]+\/?$/.test(location.pathname);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -152,7 +168,7 @@ function Sidebar({ open, onClose, hidden }: { open: boolean; onClose: () => void
       <aside className={`
         z-30 flex flex-col w-64 shrink-0 border-r border-border/60 bg-sidebar
         lg:sticky lg:top-14 lg:h-[calc(100vh-3.5rem)]
-        fixed top-0 left-0 h-screen pt-16 lg:pt-4 px-3 pb-4 transition-transform
+        fixed top-0 left-0 h-screen pt-16 lg:pt-4 px-3 pb-4 transition-transform overflow-y-auto
         ${open ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0
       `}>
         <button
@@ -163,31 +179,34 @@ function Sidebar({ open, onClose, hidden }: { open: boolean; onClose: () => void
           <X className="size-4" />
         </button>
 
-        <nav className="flex flex-col gap-0.5 mt-2">
-          {NAV.map(item => {
-            const Icon = item.icon;
-            return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                onClick={onClose}
-                end
-                className={({ isActive }) => `
-                  group flex items-center gap-3 px-3 py-2 rounded-lg text-sm
-                  transition-colors
-                  ${isActive
-                    ? "bg-primary/10 text-primary font-medium"
-                    : "text-muted-foreground hover:bg-accent hover:text-foreground"}
-                `}
-              >
-                <Icon className="size-4" />
-                <span>{item.label}</span>
-              </NavLink>
-            );
-          })}
-        </nav>
+        <SidebarSection items={NAV} onNavigate={onClose} />
+
+        {canTeach(user) && (
+          <SidebarSection
+            title="Teach"
+            icon={GraduationCap}
+            items={TEACH_NAV}
+            onNavigate={onClose}
+          />
+        )}
+
+        {isAdmin(user) && (
+          <SidebarSection
+            title="Admin"
+            icon={ShieldCheck}
+            items={ADMIN_NAV}
+            onNavigate={onClose}
+          />
+        )}
 
         <div className="mt-auto border-t border-border/60 pt-3">
+          {user && (
+            <div className="flex items-center gap-2 px-3 pb-2 text-[11px] text-muted-foreground uppercase tracking-wider">
+              <span className="rounded bg-muted px-1.5 py-0.5 font-mono">
+                {ROLE_LABEL[user.role] ?? user.role}
+              </span>
+            </div>
+          )}
           <NavLink
             to="/settings"
             onClick={onClose}
@@ -210,5 +229,46 @@ function Sidebar({ open, onClose, hidden }: { open: boolean; onClose: () => void
         </div>
       </aside>
     </>
+  );
+}
+
+function SidebarSection({
+  title, icon: Icon, items, onNavigate,
+}: {
+  title?: string;
+  icon?: any;
+  items: { to: string; label: string; icon: any }[];
+  onNavigate: () => void;
+}) {
+  return (
+    <nav className={`flex flex-col gap-0.5 ${title ? "mt-5" : "mt-2"}`}>
+      {title && (
+        <div className="px-3 pb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          {Icon && <Icon className="size-3.5" />}
+          <span>{title}</span>
+        </div>
+      )}
+      {items.map(item => {
+        const ItemIcon = item.icon;
+        return (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            onClick={onNavigate}
+            end={!title /* exact-match for top-level only; admin/teach subroutes should highlight parent */}
+            className={({ isActive }) => `
+              group flex items-center gap-3 px-3 py-2 rounded-lg text-sm
+              transition-colors
+              ${isActive
+                ? "bg-primary/10 text-primary font-medium"
+                : "text-muted-foreground hover:bg-accent hover:text-foreground"}
+            `}
+          >
+            <ItemIcon className="size-4" />
+            <span>{item.label}</span>
+          </NavLink>
+        );
+      })}
+    </nav>
   );
 }

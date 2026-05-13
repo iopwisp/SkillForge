@@ -27,7 +27,7 @@ export default [
 
   /* ── Source files: globals + lenient unused-vars ─────────────────────── */
   {
-    files: ['src/**/*.js', 'test/**/*.{js,mjs}'],
+    files: ['src/**/*.js', 'test/**/*.{js,mjs}', 'scripts/**/*.{js,mjs}'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',

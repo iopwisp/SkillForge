@@ -153,6 +153,30 @@ function filterTree(nodes, query) {
   }
   return helper(nodes);
 }`,
+  'class-names': `
+function classNames(...values) {
+  const out = [];
+  function add(value) {
+    if (!value) return;
+    if (typeof value === 'string') out.push(value);
+    else if (Array.isArray(value)) {
+      for (const item of value) add(item);
+    } else if (typeof value === 'object') {
+      for (const key of Object.keys(value)) {
+        if (value[key]) out.push(key);
+      }
+    }
+  }
+  for (const value of values) add(value);
+  return out.join(' ');
+}`,
+
+  'toggle-selection': `
+function toggleSelection(selected, id, multi) {
+  const has = selected.includes(id);
+  if (!multi) return has ? [] : [id];
+  return has ? selected.filter(x => x !== id) : [...selected, id];
+}`,
 };
 
 let okCount = 0, failCount = 0;

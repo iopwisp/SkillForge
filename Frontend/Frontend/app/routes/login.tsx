@@ -3,12 +3,20 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "~/lib/auth";
-import { ApiError } from "~/lib/api";
+import { api, ApiError } from "~/lib/api";
 import { Logo } from "~/components/brand/Logo";
 import { Input } from "~/components/ui/input";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
 import { GoogleButton } from "~/components/common/GoogleButton";
+import { MicrosoftButton } from "~/components/common/MicrosoftButton";
+
+interface AuthProvider {
+  name: string;
+  type: string;
+  enabled: boolean;
+  supportsOAuthRedirect?: boolean;
+}
 
 export default function LoginPage() {
   const { user, login } = useAuth();
@@ -18,12 +26,19 @@ export default function LoginPage() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [providers, setProviders] = useState<AuthProvider[]>([]);
 
   const next = params.get("next") || "/dashboard";
 
   useEffect(() => {
     if (user) navigate(next, { replace: true });
   }, [user, navigate, next]);
+
+  useEffect(() => {
+    api<AuthProvider[]>("/auth/providers", { auth: false })
+      .then(setProviders)
+      .catch(() => {});
+  }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -88,7 +103,12 @@ export default function LoginPage() {
 
       <Separator>or</Separator>
 
-      <GoogleButton>Continue with Google</GoogleButton>
+      {providers.some(p => p.name === "google" && p.enabled) && (
+        <GoogleButton>Continue with Google</GoogleButton>
+      )}
+      {providers.some(p => p.name === "microsoft" && p.enabled) && (
+        <MicrosoftButton className="mt-3" />
+      )}
 
       <p className="mt-6 text-sm text-muted-foreground text-center">
         New here? <Link to="/register" className="text-primary font-medium">Create an account</Link>
