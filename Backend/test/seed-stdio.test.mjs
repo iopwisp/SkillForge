@@ -44,9 +44,8 @@ function probeCommand(cmd, args) {
 function isRuntimeAvailable(language) {
   switch (language) {
     case 'JAVASCRIPT':
-      // The reference solutions use readFileSync('/dev/stdin') which only
-      // works on Unix-like systems. On Windows, /dev/stdin doesn't exist.
-      if (process.platform === 'win32') return false;
+      // Reference solutions read stdin via readFileSync(0, 'utf8') so they
+      // work on all platforms (Windows, Linux, macOS) — no '/dev/stdin' guard.
       return probeCommand('node', ['--version']);
     case 'PYTHON':
       // stdio-prepare.js hardcodes `python3` as the command

@@ -12,7 +12,7 @@
 // ---------------------------------------------------------------------------
 
 const sumOfNReferenceSolutions = {
-  JAVASCRIPT: `const lines = require('fs').readFileSync('/dev/stdin', 'utf8').trim().split('\\n');
+  JAVASCRIPT: `const lines = require('fs').readFileSync(0, 'utf8').trim().split('\\n');
 const n = parseInt(lines[0], 10);
 const nums = lines[1].split(' ').map(Number);
 let sum = 0;
@@ -87,7 +87,7 @@ int main() {
 // ---------------------------------------------------------------------------
 
 const fizzbuzzReferenceSolutions = {
-  JAVASCRIPT: `const n = parseInt(require('fs').readFileSync('/dev/stdin', 'utf8').trim(), 10);
+  JAVASCRIPT: `const n = parseInt(require('fs').readFileSync(0, 'utf8').trim(), 10);
 for (let i = 1; i <= n; i++) {
   if (i % 15 === 0) console.log('FizzBuzz');
   else if (i % 3 === 0) console.log('Fizz');
@@ -180,7 +180,7 @@ int main() {
 // ---------------------------------------------------------------------------
 
 const stableSortReferenceSolutions = {
-  JAVASCRIPT: `const lines = require('fs').readFileSync('/dev/stdin', 'utf8').trim().split('\\n');
+  JAVASCRIPT: `const lines = require('fs').readFileSync(0, 'utf8').trim().split('\\n');
 const n = parseInt(lines[0], 10);
 const records = [];
 for (let i = 1; i <= n; i++) {
