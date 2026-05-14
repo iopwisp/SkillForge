@@ -16,6 +16,7 @@
  * never put secrets into log objects in the first place.
  */
 import pino from 'pino';
+import { createRequire } from 'node:module';
 
 const isProd = process.env.NODE_ENV === 'production';
 const isTest = process.env.NODE_ENV === 'test';
@@ -44,7 +45,23 @@ const REDACT_PATHS = [
   '*.GOOGLE_CLIENT_SECRET',
 ];
 
-const usePretty = !isProd && !isTest;
+// Pretty transport is opt-in for local dev. We additionally guard against
+// pino-pretty being absent (production installs use `npm ci --omit=dev`
+// and don't ship dev-only modules), otherwise pino throws synchronously
+// at startup with "unable to determine transport target for pino-pretty"
+// — which is exactly what crashed the Render image once NODE_ENV was
+// not set to "production".
+const requireFromHere = createRequire(import.meta.url);
+function isPinoPrettyAvailable() {
+  try {
+    requireFromHere.resolve('pino-pretty');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const usePretty = !isProd && !isTest && isPinoPrettyAvailable();
 
 export const logger = pino({
   level,
