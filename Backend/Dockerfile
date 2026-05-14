@@ -2,10 +2,15 @@
 #
 # Multi-stage build: native modules (isolated-vm, better-sqlite3) compile
 # in the build stage which has python+make+g++. The runtime stage is the
-# slim node:20-alpine plus the prebuilt node_modules.
+# slim node:18-alpine plus the prebuilt node_modules.
+#
+# Pinned to Node 18 because the current isolated-vm release is not
+# compatible with Node 20's V8 ABI (build error:
+# `v8::SourceLocation does not name a type`). Once a new isolated-vm
+# release ships with Node 20 support we can move both stages to 20.
 
 # ─── Build stage ────────────────────────────────────────────────────────
-FROM node:20-alpine AS build
+FROM node:18-alpine AS build
 
 WORKDIR /app
 
@@ -18,7 +23,7 @@ RUN npm ci --omit=dev
 COPY . ./
 
 # ─── Runtime stage ──────────────────────────────────────────────────────
-FROM node:20-alpine
+FROM node:18-alpine
 
 WORKDIR /app
 
