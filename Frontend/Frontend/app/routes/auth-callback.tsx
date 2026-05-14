@@ -23,7 +23,7 @@ export default function AuthCallback() {
       const error = params.get("error");
       if (error) {
         setStatus("error");
-        setErrorMessage(`Google sign-in failed: ${error.replace(/_/g, " ")}`);
+        setErrorMessage(messageForError(error));
         return;
       }
       const access = params.get("accessToken");
@@ -82,4 +82,27 @@ function getSafeNext(next: string | null) {
     return "/dashboard";
   }
   return next;
+}
+
+/**
+ * Map a backend ?error=... code to a human-readable message.
+ *
+ * The backend returns generic codes like `oauth_failed`, `invalid_state`,
+ * and `domain_not_allowed`. We map them to specific UX text so users can
+ * tell apart "your university doesn't accept this account" from
+ * "the OAuth flow failed".
+ */
+function messageForError(code: string): string {
+  switch (code) {
+    case "domain_not_allowed":
+      return "Войти можно только с университетским аккаунтом (@astanait.edu.kz). Проверьте, что вы используете рабочий или учебный Microsoft-аккаунт.";
+    case "invalid_state":
+      return "Сессия входа истекла. Попробуйте войти ещё раз.";
+    case "missing_code":
+      return "Microsoft не вернул код авторизации. Попробуйте снова.";
+    case "oauth_failed":
+      return "Не удалось завершить вход. Попробуйте позже или обратитесь к администратору.";
+    default:
+      return `Sign-in failed: ${code.replace(/_/g, " ")}`;
+  }
 }

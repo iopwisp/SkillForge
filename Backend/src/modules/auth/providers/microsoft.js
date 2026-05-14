@@ -49,6 +49,51 @@ function buildAzureUrl(path) {
   return `https://login.microsoftonline.com/${getTenantId()}/${path}`;
 }
 
+/**
+ * Domain whitelist. Reads `MICROSOFT_ALLOWED_DOMAINS` (comma-separated).
+ * Returns:
+ *   - null → whitelist disabled (any domain accepted, default behaviour
+ *     for backward compatibility with existing deployments)
+ *   - string[] → list of allowed lowercase domains
+ *
+ * Configured for AITU deployments as
+ * `MICROSOFT_ALLOWED_DOMAINS=astanait.edu.kz,edu.astanait.edu.kz`
+ * which adds belt-and-braces protection on top of single-tenant Azure
+ * AD configuration: even guest accounts in the AITU Entra ID tenant
+ * with non-AITU emails are rejected before any user record is created.
+ */
+function getAllowedDomains() {
+  const raw = process.env.MICROSOFT_ALLOWED_DOMAINS;
+  if (!raw) return null;
+  const list = raw
+    .split(',')
+    .map((d) => d.trim().toLowerCase())
+    .filter(Boolean);
+  return list.length === 0 ? null : list;
+}
+
+/**
+ * Validate that the email's domain is permitted by the whitelist (if
+ * one is configured). Throws an Error if the email is missing, has no
+ * `@` separator, or its domain is not in the allow-list.
+ *
+ * Called from `completeAuth` and `exchangeCode` AFTER the id_token has
+ * been validated against the JWKS — so the email is always one Microsoft
+ * itself signed, never a value the caller could spoof.
+ */
+function assertEmailDomainAllowed(email) {
+  const allowed = getAllowedDomains();
+  if (!allowed) return;
+  const lower = String(email || '').toLowerCase();
+  const at = lower.indexOf('@');
+  const domain = at === -1 ? '' : lower.slice(at + 1);
+  if (!domain || !allowed.includes(domain)) {
+    const e = new Error(`email domain not allowed: ${domain || '(none)'}`);
+    e.code = 'DOMAIN_NOT_ALLOWED';
+    throw e;
+  }
+}
+
 /* ─── provider export ───────────────────────────────────────────────────── */
 
 export const microsoftProvider = {
@@ -115,6 +160,13 @@ export const microsoftProvider = {
     try {
       const tokens = await exchangeCodeForTokens(String(code));
       const payload = await validateIdToken(tokens.id_token, storedNonce);
+      try {
+        assertEmailDomainAllowed(payload.email || payload.preferred_username);
+      } catch (err) {
+        logger.warn({ err, email: payload.email || payload.preferred_username },
+          'Microsoft OAuth: email domain not in allow-list');
+        return { error: 'domain_not_allowed', frontend };
+      }
       const user = await loginOrCreateWithMicrosoft(payload);
       return { user, frontend };
     } catch (e) {
@@ -129,8 +181,16 @@ export const microsoftProvider = {
       const tokens = await exchangeCodeForTokens(code);
       // For SPA flow, we skip nonce validation since there's no stored state
       const payload = await validateIdToken(tokens.id_token, null);
+      try {
+        assertEmailDomainAllowed(payload.email || payload.preferred_username);
+      } catch (err) {
+        logger.warn({ err, email: payload.email || payload.preferred_username },
+          'Microsoft OAuth: email domain not in allow-list');
+        throw new HttpError(403, 'email domain not allowed');
+      }
       return await loginOrCreateWithMicrosoft(payload);
     } catch (e) {
+      if (e instanceof HttpError) throw e;
       logger.error({ err: e }, 'Microsoft OAuth code exchange failed');
       throw new HttpError(400, 'OAuth exchange failed');
     }
@@ -280,6 +340,12 @@ async function deriveUsername(email, name) {
 }
 
 /* ─── shared helpers ────────────────────────────────────────────────────── */
+
+/**
+ * Exposed for unit tests so the whitelist can be exercised without going
+ * through the full OAuth callback.
+ */
+export const __testing = { assertEmailDomainAllowed, getAllowedDomains };
 
 function parseStoredState(raw) {
   try {

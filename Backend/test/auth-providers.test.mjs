@@ -258,6 +258,97 @@ expect('microsoft entry has type=oauth2',
 expect('microsoft entry has supportsOAuthRedirect=true',
   msEntry && msEntry.supportsOAuthRedirect === true);
 
+/* ─── 14. Microsoft email-domain whitelist (AITU) ──────────────────────── */
+
+const { __testing: msHelpers } = await import('../src/modules/auth/providers/microsoft.js');
+const { assertEmailDomainAllowed, getAllowedDomains } = msHelpers;
+
+// 14a. unset → null (disabled, any email accepted)
+delete process.env.MICROSOFT_ALLOWED_DOMAINS;
+expect('getAllowedDomains() returns null when MICROSOFT_ALLOWED_DOMAINS unset',
+  getAllowedDomains() === null);
+
+// 14b. empty string → null (also disabled)
+process.env.MICROSOFT_ALLOWED_DOMAINS = '';
+expect('getAllowedDomains() returns null when MICROSOFT_ALLOWED_DOMAINS empty',
+  getAllowedDomains() === null);
+
+// 14c. whitespace-only → null
+process.env.MICROSOFT_ALLOWED_DOMAINS = '   ,  ';
+expect('getAllowedDomains() returns null when only whitespace/commas',
+  getAllowedDomains() === null);
+
+// 14d. parses + lowercases + trims
+process.env.MICROSOFT_ALLOWED_DOMAINS = ' Astanait.edu.kz , edu.astanait.edu.kz ';
+const domains = getAllowedDomains();
+expect('getAllowedDomains() parses comma list',
+  Array.isArray(domains) && domains.length === 2);
+expect('getAllowedDomains() lowercases first entry',
+  domains && domains[0] === 'astanait.edu.kz');
+expect('getAllowedDomains() lowercases + trims second entry',
+  domains && domains[1] === 'edu.astanait.edu.kz');
+
+// 14e. allowed email passes
+const allowedErr = await tryCatch(async () => {
+  assertEmailDomainAllowed('student@astanait.edu.kz');
+});
+expect('assertEmailDomainAllowed accepts whitelisted domain',
+  allowedErr === null);
+
+// 14f. allowed email passes (case-insensitive on email)
+const allowedErr2 = await tryCatch(async () => {
+  assertEmailDomainAllowed('STUDENT@ASTANAIT.EDU.KZ');
+});
+expect('assertEmailDomainAllowed accepts uppercase email of whitelisted domain',
+  allowedErr2 === null);
+
+// 14g. second whitelisted domain passes
+const allowedErr3 = await tryCatch(async () => {
+  assertEmailDomainAllowed('teacher@edu.astanait.edu.kz');
+});
+expect('assertEmailDomainAllowed accepts second whitelisted domain',
+  allowedErr3 === null);
+
+// 14h. wrong domain rejected
+const blockedErr = await tryCatch(async () => {
+  assertEmailDomainAllowed('evil@gmail.com');
+});
+expect('assertEmailDomainAllowed rejects non-whitelisted domain',
+  blockedErr && blockedErr.code === 'DOMAIN_NOT_ALLOWED',
+  `got ${blockedErr?.code}`);
+
+// 14i. lookalike subdomain rejected (no substring matching)
+const lookalikeErr = await tryCatch(async () => {
+  assertEmailDomainAllowed('user@evil-astanait.edu.kz');
+});
+expect('assertEmailDomainAllowed rejects lookalike subdomain',
+  lookalikeErr && lookalikeErr.code === 'DOMAIN_NOT_ALLOWED');
+
+// 14j. email without @ rejected
+const noAtErr = await tryCatch(async () => {
+  assertEmailDomainAllowed('not-an-email');
+});
+expect('assertEmailDomainAllowed rejects email without @',
+  noAtErr && noAtErr.code === 'DOMAIN_NOT_ALLOWED');
+
+// 14k. empty email rejected
+const emptyErr = await tryCatch(async () => {
+  assertEmailDomainAllowed('');
+});
+expect('assertEmailDomainAllowed rejects empty email',
+  emptyErr && emptyErr.code === 'DOMAIN_NOT_ALLOWED');
+
+// 14l. when whitelist disabled, any email passes (incl. evil)
+delete process.env.MICROSOFT_ALLOWED_DOMAINS;
+const offErr = await tryCatch(async () => {
+  assertEmailDomainAllowed('evil@gmail.com');
+});
+expect('assertEmailDomainAllowed accepts anything when whitelist disabled',
+  offErr === null);
+
+// cleanup
+delete process.env.MICROSOFT_ALLOWED_DOMAINS;
+
 /* ─── cleanup ───────────────────────────────────────────────────────────── */
 
 console.log(`\n${pass} passed, ${fail} failed.`);
