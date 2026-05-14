@@ -40,6 +40,20 @@ export async function listCourses(actor) {
 }
 
 /**
+ * Public browse catalog — every course in the installation, with a
+ * limited shape and no problems list. Available to any authenticated
+ * user (students included) so they can find a course they'd like to
+ * join and contact its owner for an invite code. This intentionally
+ * bypasses the STUDENT-narrowed visibility from `listCourses` — see
+ * ADR 0008: that narrowing applies to the "my courses" surface, not
+ * to pure discovery.
+ */
+export async function browseCourses() {
+  const rows = await q.listAllCoursesForBrowse();
+  return rows.map(toCourseBrowseItem);
+}
+
+/**
  * Return the detailed course page, or 404 if it does not exist OR if
  * the actor is a STUDENT who is not enrolled in any of the course's
  * groups. We return 404 rather than 403 for the "not enrolled" case so
@@ -341,6 +355,21 @@ function toCourseSummary(r) {
     problemCount: r.problem_count ?? 0,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+  };
+}
+
+function toCourseBrowseItem(r) {
+  return {
+    slug: r.slug,
+    title: r.title,
+    description: r.description,
+    owner: {
+      id: r.owner_id,
+      username: r.owner_username,
+      fullName: r.owner_full_name,
+    },
+    groupCount: r.group_count ?? 0,
+    studentCount: r.student_count ?? 0,
   };
 }
 

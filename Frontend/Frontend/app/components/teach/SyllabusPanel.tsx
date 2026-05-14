@@ -6,9 +6,9 @@
  * locally re-fetch after attach/detach so the position field stays in
  * sync without a full page reload.
  */
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
-import { Plus, Trash2, BookOpen, ListChecks } from "lucide-react";
+import { Plus, Trash2, BookOpen, Search, Check } from "lucide-react";
 import { toast } from "sonner";
 import { api, ApiError } from "~/lib/api";
 import { Button } from "~/components/ui/button";
@@ -25,6 +25,7 @@ import {
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
 import type { CourseProblemRef } from "~/lib/teaching-types";
+import type { ProblemSummary } from "~/lib/types";
 
 export function SyllabusPanel({
   courseSlug,
@@ -105,6 +106,7 @@ export function SyllabusPanel({
         open={attachOpen}
         onOpenChange={setAttachOpen}
         courseSlug={courseSlug}
+        attachedSlugs={problems.map(p => p.slug)}
         onAttached={onChanged}
       />
 
@@ -132,26 +134,58 @@ export function SyllabusPanel({
 }
 
 function AttachProblemDialog({
-  open, onOpenChange, courseSlug, onAttached,
+  open, onOpenChange, courseSlug, attachedSlugs, onAttached,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   courseSlug: string;
+  attachedSlugs: string[];
   onAttached: () => void;
 }) {
-  const [problemSlug, setProblemSlug] = useState("");
+  const [catalog, setCatalog] = useState<ProblemSummary[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState<ProblemSummary | null>(null);
   const [position, setPosition] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  // Fetch problems catalog on open. Reset local state.
+  useEffect(() => {
+    if (!open) return;
+    setQuery("");
+    setSelected(null);
+    setPosition("");
+    setLoading(true);
+    api<{ items: ProblemSummary[]; total: number; page: number; pageSize: number }>(
+      "/problems?pageSize=200",
+    )
+      .then((r) => setCatalog(r.items || []))
+      .catch((e) => toast.error(e instanceof ApiError ? e.message : "Could not load problems"))
+      .finally(() => setLoading(false));
+  }, [open]);
+
+  const attachedSet = useMemo(() => new Set(attachedSlugs), [attachedSlugs]);
+
+  const filtered = useMemo(() => {
+    const available = catalog.filter(p => !attachedSet.has(p.slug));
+    const q = query.trim().toLowerCase();
+    if (!q) return available.slice(0, 50);
+    return available.filter(p =>
+      p.title.toLowerCase().includes(q) ||
+      p.slug.toLowerCase().includes(q) ||
+      p.tags.some(t => t.toLowerCase().includes(q)),
+    ).slice(0, 50);
+  }, [catalog, attachedSet, query]);
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (!selected) return;
     setSubmitting(true);
     try {
-      const body: any = { problemSlug: problemSlug.trim() };
+      const body: any = { problemSlug: selected.slug };
       if (position.trim()) body.position = parseInt(position, 10);
       await api(`/courses/${courseSlug}/problems`, { method: "POST", body });
-      toast.success(`Attached "${problemSlug}"`);
-      setProblemSlug(""); setPosition("");
+      toast.success(`Attached "${selected.title}"`);
       onOpenChange(false);
       onAttached();
     } catch (e) {
@@ -163,27 +197,77 @@ function AttachProblemDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-w-lg">
         <form onSubmit={submit}>
           <DialogHeader>
             <DialogTitle>Attach problem to course</DialogTitle>
           </DialogHeader>
-          <p className="my-2 text-sm text-muted-foreground inline-flex items-center gap-1.5">
-            <ListChecks className="size-4" />
-            Use the slug from the <Link to="/teach/problems" className="text-primary hover:underline">problems catalog</Link>.
+          <p className="my-2 text-sm text-muted-foreground">
+            Search the catalog and pick a problem to add to the syllabus.{" "}
+            <Link to="/teach/problems" className="text-primary hover:underline">
+              Manage the catalog →
+            </Link>
           </p>
+
           <div className="space-y-3 my-3">
             <div>
-              <Label htmlFor="problem-slug">Problem slug</Label>
-              <Input
-                id="problem-slug"
-                required
-                value={problemSlug}
-                onChange={(e) => setProblemSlug(e.target.value.toLowerCase())}
-                placeholder="palindrome-check"
-                className="mt-1.5 font-mono"
-              />
+              <Label htmlFor="problem-search">Problem</Label>
+              <div className="relative mt-1.5">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                <Input
+                  id="problem-search"
+                  value={query}
+                  onChange={(e) => { setQuery(e.target.value); setSelected(null); }}
+                  placeholder="Search by title, slug, or tag…"
+                  className="pl-9"
+                  autoComplete="off"
+                />
+              </div>
+
+              <div className="mt-2 max-h-64 overflow-y-auto rounded-md border border-border bg-card">
+                {loading ? (
+                  <div className="p-4 text-sm text-muted-foreground">Loading catalog…</div>
+                ) : filtered.length === 0 ? (
+                  <div className="p-4 text-sm text-muted-foreground">
+                    {catalog.length === 0
+                      ? "No problems in the catalog. Create one in the problems catalog first."
+                      : attachedSet.size > 0 && catalog.every(p => attachedSet.has(p.slug))
+                        ? "Every problem in the catalog is already attached."
+                        : "No problems match this search."}
+                  </div>
+                ) : (
+                  <ul className="divide-y divide-border">
+                    {filtered.map(p => {
+                      const isSelected = selected?.slug === p.slug;
+                      return (
+                        <li key={p.slug}>
+                          <button
+                            type="button"
+                            onClick={() => setSelected(p)}
+                            className={`w-full text-left px-3 py-2 flex items-center gap-3 hover:bg-accent/50 transition-colors ${
+                              isSelected ? "bg-primary/10" : ""
+                            }`}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium truncate text-sm">{p.title}</div>
+                              <code className="text-xs text-muted-foreground">{p.slug}</code>
+                            </div>
+                            <DifficultyBadge difficulty={p.difficulty} />
+                            {p.problemType && (
+                              <span className="text-[10px] text-muted-foreground shrink-0">
+                                {p.problemType}
+                              </span>
+                            )}
+                            {isSelected && <Check className="size-4 text-primary shrink-0" />}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
             </div>
+
             <div>
               <Label htmlFor="position">Position (optional)</Label>
               <Input
@@ -199,8 +283,8 @@ function AttachProblemDialog({
           </div>
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button type="submit" disabled={submitting}>
-              {submitting ? "Attaching…" : "Attach"}
+            <Button type="submit" disabled={submitting || !selected}>
+              {submitting ? "Attaching…" : selected ? `Attach "${selected.title}"` : "Attach"}
             </Button>
           </DialogFooter>
         </form>

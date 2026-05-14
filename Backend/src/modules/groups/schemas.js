@@ -19,3 +19,7 @@ export const UpdateGroupSchema = z.object({
 export const AddMemberSchema = z.object({
   username: z.string().min(1).max(64),
 });
+
+export const JoinByInviteCodeSchema = z.object({
+  code: z.string().min(4).max(20),
+});

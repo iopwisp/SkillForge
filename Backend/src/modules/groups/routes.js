@@ -14,6 +14,9 @@
  *   GET    /:groupSlug/members                  — list members (role-narrowed)
  *   POST   /:groupSlug/members                  — add by username (owner/admin)
  *   DELETE /:groupSlug/members/:username        — remove member  (owner/admin)
+ *   GET    /:groupSlug/invite                   — read invite code (owner/admin)
+ *   POST   /:groupSlug/invite                   — generate/regenerate (owner/admin)
+ *   DELETE /:groupSlug/invite                   — disable invite code (owner/admin)
  */
 import { Router } from 'express';
 
@@ -78,6 +81,26 @@ router.delete('/:groupSlug/members/:username', requireInstructor, asyncHandler(a
     req.user, req.params.courseSlug, req.params.groupSlug, req.params.username,
   );
   res.json({ ok: true });
+}));
+
+/* ─── invite codes (self-enrolment, owner/ADMIN-managed) ────────────────── */
+
+router.get('/:groupSlug/invite', requireInstructor, asyncHandler(async (req, res) => {
+  res.json(
+    await groups.getInvite(req.user, req.params.courseSlug, req.params.groupSlug),
+  );
+}));
+
+router.post('/:groupSlug/invite', requireInstructor, asyncHandler(async (req, res) => {
+  res.status(201).json(
+    await groups.generateInvite(req.user, req.params.courseSlug, req.params.groupSlug),
+  );
+}));
+
+router.delete('/:groupSlug/invite', requireInstructor, asyncHandler(async (req, res) => {
+  res.json(
+    await groups.disableInvite(req.user, req.params.courseSlug, req.params.groupSlug),
+  );
 }));
 
 export default router;

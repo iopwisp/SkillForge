@@ -57,6 +57,17 @@ export interface GroupDetail extends GroupSummary {
   members: GroupMember[];
 }
 
+export interface GroupInviteInfo {
+  code: string | null;
+  enabled: boolean;
+  joinUrl: string | null; // full URL with the code baked in, null when no code yet
+}
+
+export interface JoinByInviteResponse {
+  course: { slug: string; title: string };
+  group: { slug: string; title: string };
+}
+
 /* ─── Exams ──────────────────────────────────────────────────────────────── */
 
 export interface ExamSummary {
@@ -265,6 +276,7 @@ export interface ContestListItem {
   isPublic: boolean;
   status: ContestStatus;
   participantCount: number;
+  isRegistered?: boolean;
 }
 
 export interface ContestListPage {

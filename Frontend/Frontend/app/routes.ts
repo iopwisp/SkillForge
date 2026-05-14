@@ -22,6 +22,7 @@ export default [
     route("courses", "routes/courses.tsx"),
     route("courses/:slug", "routes/course-detail.tsx"),
     route("courses/:slug/exams/:examSlug", "routes/exam.tsx"),
+    route("join", "routes/join.tsx"),
 
     /* Contest surfaces. */
     route("contests", "routes/contests.tsx"),
@@ -37,6 +38,8 @@ export default [
     route("teach/courses", "routes/teach/courses.tsx"),
     route("teach/courses/:slug", "routes/teach/course-detail.tsx"),
     route("teach/courses/:slug/live", "routes/teach/live-dashboard.tsx"),
+    route("teach/contests", "routes/teach/contests.tsx"),
+    route("teach/contests/:slug", "routes/teach/contest-detail.tsx"),
 
     route("admin", "routes/admin/index.tsx"),
     route("admin/audit-log", "routes/admin/audit-log.tsx"),

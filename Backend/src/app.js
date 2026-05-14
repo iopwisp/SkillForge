@@ -32,6 +32,7 @@ import contestsRoutes, {
 import coursesRoutes from './modules/courses/routes.js';
 import examsRoutes from './modules/exams/routes.js';
 import groupsRoutes from './modules/groups/routes.js';
+import groupsJoinRoutes from './modules/groups/join-routes.js';
 import problemsRoutes from './modules/problems/routes.js';
 import submissionsRoutes from './modules/submissions/routes.js';
 import usersRoutes from './modules/users/routes.js';
@@ -121,6 +122,10 @@ export function createApp() {
   // their handlers.
   app.use('/api/courses/:courseSlug/groups', groupsRoutes);
   app.use('/api/courses/:courseSlug/exams', examsRoutes);
+  // Flat self-enrolment route: students redeem a code without knowing
+  // the course slug up front. Mounted before the /api/courses catchall
+  // for the same reason as the nested groups/exams routers above.
+  app.use('/api/groups/join', groupsJoinRoutes);
   app.use('/api/courses', coursesRoutes);
 
   // ─── Error handler ────────────────────────────────────────────────────────

@@ -141,7 +141,9 @@ export async function getContest(actor, slug) {
  */
 export async function listContests(actor, { page, pageSize, status }) {
   const offset = (Math.max(page, 1) - 1) * pageSize;
-  const { rows, total } = await q.listContests({ limit: pageSize, offset, status });
+  const { rows, total } = await q.listContests({
+    limit: pageSize, offset, status, actorId: actor?.id ?? null,
+  });
 
   return {
     items: rows.map(toContestListItem),
@@ -186,6 +188,7 @@ function toContestListItem(c) {
     isPublic: c.is_public,
     status: c.status,
     participantCount: c.participant_count,
+    isRegistered: !!c.is_registered,
   };
 }
 

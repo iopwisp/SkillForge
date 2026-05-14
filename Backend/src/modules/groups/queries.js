@@ -120,3 +120,50 @@ export const removeMember = (groupId, userId, executor = db) =>
     WHERE group_id = $1 AND user_id = $2
     RETURNING user_id
   `, [groupId, userId]);
+
+/* ─── invite codes ──────────────────────────────────────────────────────── */
+
+/**
+ * Resolve a raw invite code to the full (group + course) context that
+ * `joinByInviteCode` needs to return. Emits the course's slug / title so
+ * the service does not have to do a second round-trip through
+ * courses.service. See ADR 0008 §"Cross-module data flow" for why we
+ * read the sibling courses table directly.
+ */
+export const findGroupByInviteCode = (code, executor = db) =>
+  executor.maybeOne(`
+    SELECT
+      g.id            AS group_id,
+      g.slug          AS group_slug,
+      g.title         AS group_title,
+      g.invite_code,
+      g.invite_enabled,
+      c.id            AS course_id,
+      c.slug          AS course_slug,
+      c.title         AS course_title
+    FROM groups g
+    JOIN courses c ON c.id = g.course_id
+    WHERE g.invite_code = $1
+  `, [code]);
+
+/**
+ * Upsert-style helper for the "generate / regenerate / enable / disable"
+ * flows. Each mutation in the service always knows both the code value
+ * (possibly unchanged on disable) and the enabled flag it wants, so we
+ * just UPDATE both columns in a single round-trip.
+ */
+export const setGroupInvite = (groupId, { code, enabled }, executor = db) =>
+  executor.none(`
+    UPDATE groups
+       SET invite_code = $2,
+           invite_enabled = $3,
+           updated_at = NOW()
+     WHERE id = $1
+  `, [groupId, code, enabled]);
+
+export const getGroupInviteInfo = (groupId, executor = db) =>
+  executor.maybeOne(`
+    SELECT invite_code, invite_enabled
+    FROM groups
+    WHERE id = $1
+  `, [groupId]);

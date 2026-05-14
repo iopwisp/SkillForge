@@ -15,6 +15,9 @@ export const CreateContestSchema = z.object({
 }).refine(data => new Date(data.endsAt) > new Date(data.startsAt), {
   message: 'endsAt must be after startsAt',
   path: ['endsAt'],
+}).refine(data => new Date(data.startsAt) > new Date(), {
+  message: 'startsAt must be in the future',
+  path: ['startsAt'],
 });
 
 export const UpdateContestSchema = z.object({

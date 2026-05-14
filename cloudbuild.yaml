@@ -1,0 +1,25 @@
+# Cloud Build config: build backend Docker image (Kaniko) and push to Artifact Registry
+options:
+  substitution_option: "ALLOW_LOOSE"
+
+substitutions:
+  _REGION: "us-central1"
+  _REPO: "skillforge-repo"
+  _SERVICE: "skillforge-backend"
+
+steps:
+  - name: "gcr.io/kaniko-project/executor:latest"
+    args:
+      - --dockerfile=/workspace/Backend/Dockerfile
+      - --context=/workspace/Backend
+      - --destination=us-central1-docker.pkg.dev/$PROJECT_ID/$_REPO/$_SERVICE:$SHORT_SHA
+      - --destination=us-central1-docker.pkg.dev/$PROJECT_ID/$_REPO/$_SERVICE:latest
+      - --cache=true
+      - --verbosity=info
+
+images:
+  - us-central1-docker.pkg.dev/$PROJECT_ID/$_REPO/$_SERVICE:$SHORT_SHA
+  - us-central1-docker.pkg.dev/$PROJECT_ID/$_REPO/$_SERVICE:latest
+
+# 20 minutes timeout
+timeout: "1200s"

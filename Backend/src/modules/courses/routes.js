@@ -24,6 +24,13 @@ router.get('/', requireAuth, asyncHandler(async (req, res) => {
   res.json(await courses.listCourses(req.user));
 }));
 
+// Browse catalog: every course in the installation with a limited
+// shape (no problems list) for any authenticated user. Mounted BEFORE
+// the `/:slug` catch-all so Express matches the literal path first.
+router.get('/public', requireAuth, asyncHandler(async (_req, res) => {
+  res.json(await courses.browseCourses());
+}));
+
 router.get('/:slug', requireAuth, asyncHandler(async (req, res) => {
   res.json(await courses.getCourse(req.user, req.params.slug));
 }));

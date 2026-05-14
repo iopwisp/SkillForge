@@ -18,7 +18,7 @@ import {
 } from "react-router";
 import {
   Activity, ArrowLeft, BookOpen, FileSignature, Pencil, Trash2, Trophy, Users,
-  AlertCircle, Save,
+  AlertCircle, Save, Ticket,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, ApiError } from "~/lib/api";
@@ -37,12 +37,16 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader,
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader,
+  DialogTitle,
+} from "~/components/ui/dialog";
 import { Empty } from "~/components/common/Empty";
 import { SyllabusPanel } from "~/components/teach/SyllabusPanel";
 import { GroupsPanel } from "~/components/teach/GroupsPanel";
 import { ExamsPanel } from "~/components/teach/ExamsPanel";
 import { GradebookPanel } from "~/components/teach/GradebookPanel";
-import type { CourseDetail } from "~/lib/teaching-types";
+import type { CourseDetail, GroupSummary } from "~/lib/teaching-types";
 
 const VALID_TABS = ["syllabus", "groups", "exams", "gradebook"] as const;
 type Tab = (typeof VALID_TABS)[number];
@@ -68,6 +72,8 @@ function Inner() {
   const [error, setError] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(false);
+  const [createGroupOpen, setCreateGroupOpen] = useState(false);
+  const [checkingInvite, setCheckingInvite] = useState(false);
 
   async function reload() {
     if (!slug) return;
@@ -100,6 +106,31 @@ function Inner() {
       navigate("/teach/courses", { replace: true });
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "Could not delete course");
+    }
+  }
+
+  // Invite codes live on groups, not courses. From the instructor's
+  // perspective, though, "generate invite code" is a course-level verb —
+  // so we probe the groups list and either jump into the Groups tab
+  // focused on the first group's invite section, or prompt to create a
+  // default group before showing the invite UI.
+  async function openInviteFlow() {
+    if (!slug) return;
+    setCheckingInvite(true);
+    try {
+      const groups = await api<GroupSummary[]>(`/courses/${slug}/groups`);
+      if (groups.length > 0) {
+        const next = new URLSearchParams(searchParams);
+        next.set("tab", "groups");
+        next.set("focus", "invite");
+        setSearchParams(next, { replace: true });
+      } else {
+        setCreateGroupOpen(true);
+      }
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Could not check groups");
+    } finally {
+      setCheckingInvite(false);
     }
   }
 
@@ -147,6 +178,13 @@ function Inner() {
                 <Activity className="size-4 mr-1.5" /> Live
               </Link>
             </Button>
+            <Button
+              variant="outline" size="sm"
+              onClick={openInviteFlow}
+              disabled={checkingInvite}
+            >
+              <Ticket className="size-4 mr-1.5" /> Invite code
+            </Button>
             <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
               <Pencil className="size-4 mr-1.5" /> Edit
             </Button>
@@ -192,6 +230,19 @@ function Inner() {
         onOpenChange={setEditOpen}
         course={course}
         onSaved={reload}
+      />
+
+      <CreateDefaultGroupDialog
+        open={createGroupOpen}
+        onOpenChange={setCreateGroupOpen}
+        courseSlug={course.slug}
+        onCreated={() => {
+          setCreateGroupOpen(false);
+          const next = new URLSearchParams(searchParams);
+          next.set("tab", "groups");
+          next.set("focus", "invite");
+          setSearchParams(next, { replace: true });
+        }}
       />
 
       <AlertDialog open={pendingDelete} onOpenChange={setPendingDelete}>
@@ -299,5 +350,95 @@ function EditCourseDialog({
         </form>
       </AlertDialogContent>
     </AlertDialog>
+  );
+}
+
+/**
+ * Entry-point dialog for the "Invite code" header button when the
+ * course has no groups yet. Students can only join a specific group,
+ * so the invite code lives on the group — we offer to create a sane
+ * default (`main` / `Main`) so the instructor can keep moving instead
+ * of context-switching into the Groups tab to bootstrap one.
+ */
+function CreateDefaultGroupDialog({
+  open, onOpenChange, courseSlug, onCreated,
+}: {
+  open: boolean;
+  onOpenChange: (o: boolean) => void;
+  courseSlug: string;
+  onCreated: () => void;
+}) {
+  const [slug, setSlug] = useState("main");
+  const [title, setTitle] = useState("Main");
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setSlug("main");
+      setTitle("Main");
+    }
+  }, [open]);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      await api(`/courses/${courseSlug}/groups`, {
+        method: "POST",
+        body: { slug: slug.trim(), title: title.trim() },
+      });
+      toast.success(`Created group "${title}"`);
+      onCreated();
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Could not create group");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <form onSubmit={submit}>
+          <DialogHeader>
+            <DialogTitle>Create a group first</DialogTitle>
+            <DialogDescription>
+              Invite codes live on groups — students join a specific group.
+              Create a default one here and we'll take you to the invite section.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 my-3">
+            <div>
+              <Label htmlFor="default-group-slug">Slug</Label>
+              <Input
+                id="default-group-slug"
+                required
+                value={slug}
+                onChange={(e) => setSlug(e.target.value.toLowerCase())}
+                placeholder="main"
+                className="mt-1.5 font-mono"
+              />
+            </div>
+            <div>
+              <Label htmlFor="default-group-title">Title</Label>
+              <Input
+                id="default-group-title"
+                required
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Main"
+                className="mt-1.5"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button type="submit" disabled={submitting}>
+              {submitting ? "Creating…" : "Create group"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

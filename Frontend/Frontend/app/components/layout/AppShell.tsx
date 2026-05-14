@@ -2,14 +2,15 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import {
   LayoutDashboard, ListChecks, FolderTree, Trophy, ScrollText, Star, Settings,
   LogOut, Menu, X, Sun, Moon, Search, Sparkles, GraduationCap, BookOpen,
-  PenSquare, ShieldCheck, FileClock, Swords,
+  PenSquare, ShieldCheck, FileClock, Swords, Ticket,
 } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "~/lib/auth";
 import { useTheme } from "~/lib/theme";
-import { canTeach, isAdmin, ROLE_LABEL } from "~/lib/types";
+import { canTeach, isAdmin, ROLE_LABEL, type Role } from "~/lib/types";
 import { Logo } from "~/components/brand/Logo";
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
+import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import {
@@ -20,6 +21,7 @@ import {
 const NAV = [
   { to: "/dashboard",   label: "Dashboard",  icon: LayoutDashboard },
   { to: "/courses",     label: "Courses",    icon: BookOpen },
+  { to: "/join",        label: "Join course", icon: Ticket },
   { to: "/contests",    label: "Contests",   icon: Swords },
   { to: "/problems",    label: "Problems",   icon: ListChecks },
   { to: "/categories",  label: "Categories", icon: FolderTree },
@@ -30,6 +32,7 @@ const NAV = [
 
 const TEACH_NAV = [
   { to: "/teach/courses",  label: "Courses",  icon: BookOpen },
+  { to: "/teach/contests", label: "Contests", icon: Swords },
   { to: "/teach/problems", label: "Problems", icon: PenSquare },
 ];
 
@@ -120,6 +123,7 @@ function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
                     <AvatarFallback>{user.username.slice(0,2).toUpperCase()}</AvatarFallback>
                   </Avatar>
                   <span className="hidden sm:block text-sm font-medium">{user.username}</span>
+                  <RoleBadge role={user.role} className="hidden sm:inline-flex" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
@@ -239,8 +243,7 @@ function SidebarSection({
   icon?: any;
   items: { to: string; label: string; icon: any }[];
   onNavigate: () => void;
-}) {
-  return (
+}) {  return (
     <nav className={`flex flex-col gap-0.5 ${title ? "mt-5" : "mt-2"}`}>
       {title && (
         <div className="px-3 pb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -270,5 +273,20 @@ function SidebarSection({
         );
       })}
     </nav>
+  );
+}
+
+function RoleBadge({ role, className = "" }: { role: Role; className?: string }) {
+  const tone =
+    role === "ADMIN"      ? "bg-rose-500/10 text-rose-500 border-rose-500/20" :
+    role === "INSTRUCTOR" ? "bg-sky-500/10 text-sky-500 border-sky-500/20" :
+                            "bg-emerald-500/10 text-emerald-500 border-emerald-500/20";
+  return (
+    <Badge
+      variant="outline"
+      className={`px-1.5 py-0 text-[10px] leading-4 uppercase tracking-wide ${tone} ${className}`}
+    >
+      {ROLE_LABEL[role] ?? role}
+    </Badge>
   );
 }

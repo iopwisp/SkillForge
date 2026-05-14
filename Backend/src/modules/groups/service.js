@@ -11,6 +11,8 @@
  *     courses.service and avoid a circular dependency with the course
  *     visibility logic that lives there.
  */
+import { randomInt } from 'node:crypto';
+
 import { withTransaction } from '../../shared/db.js';
 import { HttpError } from '../../shared/errors.js';
 import * as audit from '../audit/service.js';
@@ -162,6 +164,142 @@ export async function removeMember(actor, courseSlug, groupSlug, username) {
     entityType: 'GROUP_MEMBER',
     entityKey: `${courseSlug}:${groupSlug}:${username}`,
     details: { courseSlug, groupSlug, username, userId },
+  });
+}
+
+/* ─── invite codes (self-enrolment) ─────────────────────────────────────── */
+
+/**
+ * 32-char alphabet intentionally excluding the ambiguous pairs O/0 and
+ * I/1 so a student squinting at a printed/projected code can type what
+ * they see without juggling "looks like a zero" guesses.
+ */
+const INVITE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const INVITE_CODE_LEN = 8; // 8 chars → 32^8 ≈ 10^12 space; plenty for a university.
+
+/** Emit a cryptographically random 8-char code formatted as `ABCD-1234`. */
+function generateInviteCode() {
+  let raw = '';
+  for (let i = 0; i < INVITE_CODE_LEN; i += 1) {
+    raw += INVITE_ALPHABET[randomInt(0, INVITE_ALPHABET.length)];
+  }
+  return `${raw.slice(0, 4)}-${raw.slice(4)}`;
+}
+
+/** Normalise user-provided codes: strip whitespace + dashes, uppercase. */
+export function normalizeInviteCode(input) {
+  if (typeof input !== 'string') return '';
+  const cleaned = input.trim().toUpperCase().replace(/[\s-]+/g, '');
+  if (cleaned.length !== INVITE_CODE_LEN) return '';
+  // Stored format is `ABCD-1234`; normalise back to that so the UNIQUE
+  // index lookup matches what we stored.
+  return `${cleaned.slice(0, 4)}-${cleaned.slice(4)}`;
+}
+
+export async function generateInvite(actor, courseSlug, groupSlug) {
+  const course = await resolveCourseOr404(courseSlug);
+  assertCanManageCourse(actor, course);
+
+  return withTransaction(async (tx) => {
+    const group = await q.findGroupByCourseAndSlug(course.id, groupSlug, tx);
+    if (!group) throw new HttpError(404, 'Group not found');
+
+    // Retry on the astronomically unlikely UNIQUE collision with another
+    // group's code. 32^8 space, so in practice this loop runs exactly once.
+    let code = generateInviteCode();
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const clash = await q.findGroupByInviteCode(code, tx);
+      if (!clash || clash.group_id === group.id) break;
+      code = generateInviteCode();
+    }
+
+    await q.setGroupInvite(group.id, { code, enabled: true }, tx);
+    await audit.recordEvent(actor, {
+      action: 'GENERATE_INVITE',
+      entityType: 'GROUP',
+      entityKey: `${courseSlug}:${groupSlug}`,
+      details: { courseSlug, groupSlug },
+    }, { db: tx });
+    return { code, enabled: true };
+  });
+}
+
+export async function disableInvite(actor, courseSlug, groupSlug) {
+  const course = await resolveCourseOr404(courseSlug);
+  assertCanManageCourse(actor, course);
+
+  return withTransaction(async (tx) => {
+    const group = await q.findGroupByCourseAndSlug(course.id, groupSlug, tx);
+    if (!group) throw new HttpError(404, 'Group not found');
+
+    const current = await q.getGroupInviteInfo(group.id, tx);
+    // Keep the code on disable — see ADR note above; only flip the flag.
+    await q.setGroupInvite(
+      group.id,
+      { code: current?.invite_code ?? null, enabled: false },
+      tx,
+    );
+    await audit.recordEvent(actor, {
+      action: 'DISABLE_INVITE',
+      entityType: 'GROUP',
+      entityKey: `${courseSlug}:${groupSlug}`,
+      details: { courseSlug, groupSlug },
+    }, { db: tx });
+    return { code: current?.invite_code ?? null, enabled: false };
+  });
+}
+
+export async function getInvite(actor, courseSlug, groupSlug) {
+  const course = await resolveCourseOr404(courseSlug);
+  assertCanManageCourse(actor, course);
+
+  const group = await q.findGroupByCourseAndSlug(course.id, groupSlug);
+  if (!group) throw new HttpError(404, 'Group not found');
+
+  const info = await q.getGroupInviteInfo(group.id);
+  return {
+    code: info?.invite_code ?? null,
+    enabled: !!info?.invite_enabled,
+  };
+}
+
+/**
+ * Student-facing self-enrolment. Any authenticated user may call this;
+ * the "authorization" here is possession of the code itself.
+ *
+ * Idempotent on membership: re-entering the same code when already
+ * enrolled returns the same 200 shape rather than a 409, so students
+ * who click a shared link twice don't see a scary "already a member"
+ * error. The ON CONFLICT DO NOTHING in `group_members` makes this safe.
+ */
+export async function joinByInviteCode(user, rawCode) {
+  const code = normalizeInviteCode(rawCode);
+  if (!code) throw new HttpError(404, 'Invalid invite code');
+
+  const found = await q.findGroupByInviteCode(code);
+  if (!found) throw new HttpError(404, 'Invalid invite code');
+  if (!found.invite_enabled) {
+    throw new HttpError(410, 'This invite code is no longer active');
+  }
+
+  return withTransaction(async (tx) => {
+    const inserted = await q.addMember(found.group_id, user.id, tx);
+    // Only audit the new join; silent no-op for already-members.
+    if (inserted) {
+      await audit.recordEvent(user, {
+        action: 'JOIN_BY_INVITE',
+        entityType: 'GROUP_MEMBER',
+        entityKey: `${found.course_slug}:${found.group_slug}:${user.username}`,
+        details: {
+          courseSlug: found.course_slug,
+          groupSlug: found.group_slug,
+        },
+      }, { db: tx });
+    }
+    return {
+      course: { slug: found.course_slug, title: found.course_title },
+      group: { slug: found.group_slug, title: found.group_title },
+    };
   });
 }
 

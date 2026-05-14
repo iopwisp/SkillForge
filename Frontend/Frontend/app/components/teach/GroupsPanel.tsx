@@ -9,11 +9,13 @@
  * (`GET /api/courses/:courseSlug/groups/:groupSlug`) so we don't pull
  * every member list at once.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Plus, Trash2, Users, UserMinus, UserPlus, Pencil, AlertCircle,
+  Ticket, Copy, RotateCw, Power, PowerOff,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useSearchParams } from "react-router";
 import { api, ApiError } from "~/lib/api";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -27,7 +29,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader,
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
-import type { GroupSummary, GroupDetail } from "~/lib/teaching-types";
+import type { GroupSummary, GroupDetail, GroupInviteInfo } from "~/lib/teaching-types";
 import { Avatar, AvatarFallback, AvatarImage } from "~/components/ui/avatar";
 
 export function GroupsPanel({ courseSlug }: { courseSlug: string }) {
@@ -203,9 +205,7 @@ function GroupDetailPanel({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [username, setUsername] = useState("");
-  const [adding, setAdding] = useState(false);
-
-  async function reload() {
+  const [adding, setAdding] = useState(false);  async function reload() {
     setLoading(true);
     setError(null);
     try {
@@ -283,6 +283,8 @@ function GroupDetailPanel({
         </Button>
       </form>
 
+      <InviteCodeSection courseSlug={courseSlug} groupSlug={groupSlug} />
+
       {detail.members.length === 0 ? (
         <div className="px-5 py-8 text-sm text-center text-muted-foreground">
           No members yet — add one above.
@@ -314,6 +316,215 @@ function GroupDetailPanel({
       )}
     </div>
   );
+}
+
+/* ─── Invite code panel (self-enrolment) ─────────────────────────────────── */
+
+function InviteCodeSection({
+  courseSlug, groupSlug,
+}: {
+  courseSlug: string;
+  groupSlug: string;
+}) {
+  const [info, setInfo] = useState<GroupInviteInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<"generate" | "disable" | null>(null);
+  const [searchParams] = useSearchParams();
+  const sectionRef = useRef<HTMLDivElement | null>(null);
+
+  const joinBase = typeof window !== "undefined" ? window.location.origin : "";
+
+  // Course-detail's "Invite code" button deep-links here with
+  // `?focus=invite`. Defer the scroll one tick so the panel is mounted
+  // and measurable; smooth scroll + `block: 'center'` avoids
+  // half-hidden sections behind the sticky header.
+  useEffect(() => {
+    if (searchParams.get("focus") !== "invite") return;
+    const t = setTimeout(() => {
+      sectionRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 150);
+    return () => clearTimeout(t);
+  }, [searchParams, groupSlug]);
+
+  async function load() {
+    setLoading(true);
+    try {
+      const raw = await api<{ code: string | null; enabled: boolean }>(
+        `/courses/${courseSlug}/groups/${groupSlug}/invite`,
+      );
+      setInfo(toInviteInfo(raw, joinBase));
+    } catch (e) {
+      // Treat as "no invite" rather than a blocking error — the rest of
+      // the panel is still useful without this section.
+      setInfo({ code: null, enabled: false, joinUrl: null });
+      if (e instanceof ApiError && e.status !== 404) {
+        toast.error(e.message);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Lazy-load on panel mount / group change so we don't pay this round
+  // trip for instructors just browsing member lists.
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [courseSlug, groupSlug]);
+
+  async function generate() {
+    setBusy("generate");
+    try {
+      const raw = await api<{ code: string; enabled: boolean }>(
+        `/courses/${courseSlug}/groups/${groupSlug}/invite`,
+        { method: "POST" },
+      );
+      const next = toInviteInfo(raw, joinBase);
+      setInfo(next);
+      toast.success(info?.code ? "Regenerated invite code" : "Invite code generated");
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Could not generate code");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function disable() {
+    setBusy("disable");
+    try {
+      const raw = await api<{ code: string | null; enabled: boolean }>(
+        `/courses/${courseSlug}/groups/${groupSlug}/invite`,
+        { method: "DELETE" },
+      );
+      setInfo(toInviteInfo(raw, joinBase));
+      toast.success("Invite code disabled");
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : "Could not disable code");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function copy(text: string, label: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`Copied ${label}`);
+    } catch {
+      toast.error("Clipboard not available");
+    }
+  }
+
+  return (
+    <div ref={sectionRef} className="px-5 py-4 border-b border-border space-y-3">
+      <div className="flex items-center gap-2">
+        <Ticket className="size-4 text-muted-foreground" />
+        <h4 className="text-sm font-medium">Invite code</h4>
+        {info?.code && info.enabled && (
+          <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+            Active
+          </span>
+        )}
+        {info?.code && !info.enabled && (
+          <span className="text-[10px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+            Disabled
+          </span>
+        )}
+      </div>
+
+      {loading ? (
+        <div className="h-10 rounded bg-muted animate-pulse" />
+      ) : !info?.code ? (
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs text-muted-foreground">
+            Generate a code and share it with students so they can self-enroll.
+          </p>
+          <Button size="sm" onClick={generate} disabled={busy !== null}>
+            <Ticket className="size-3.5 mr-1.5" />
+            {busy === "generate" ? "Generating…" : "Generate invite"}
+          </Button>
+        </div>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            <code className="font-mono text-lg tracking-widest px-3 py-1.5 rounded-md bg-muted border border-border">
+              {info.code}
+            </code>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => copy(info.code!, "code")}
+              aria-label="Copy code"
+            >
+              <Copy className="size-3.5 mr-1" /> Code
+            </Button>
+            {info.joinUrl && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => copy(info.joinUrl!, "join link")}
+                aria-label="Copy join link"
+              >
+                <Copy className="size-3.5 mr-1" /> Link
+              </Button>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={generate}
+              disabled={busy !== null}
+            >
+              <RotateCw className="size-3.5 mr-1.5" />
+              {busy === "generate" ? "Regenerating…" : "Regenerate"}
+            </Button>
+            {info.enabled ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={disable}
+                disabled={busy !== null}
+                className="text-rose-500 hover:text-rose-500 hover:bg-rose-500/10"
+              >
+                <PowerOff className="size-3.5 mr-1.5" />
+                {busy === "disable" ? "Disabling…" : "Disable"}
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={generate}
+                disabled={busy !== null}
+              >
+                <Power className="size-3.5 mr-1.5" />
+                Enable
+              </Button>
+            )}
+          </div>
+          {info.joinUrl && (
+            <p className="text-[11px] text-muted-foreground break-all">
+              Share: <code className="text-xs">{info.joinUrl}</code>
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The server returns `{code, enabled}`; we compose the full join URL on
+ * the client so we don't have to teach the backend where the SPA is
+ * hosted (can vary per on-prem install).
+ */
+function toInviteInfo(
+  raw: { code: string | null; enabled: boolean },
+  origin: string,
+): GroupInviteInfo {
+  return {
+    code: raw.code,
+    enabled: raw.enabled,
+    joinUrl: raw.code && origin
+      ? `${origin}/join?code=${encodeURIComponent(raw.code)}`
+      : null,
+  };
 }
 
 /* ─── Dialogs ────────────────────────────────────────────────────────────── */

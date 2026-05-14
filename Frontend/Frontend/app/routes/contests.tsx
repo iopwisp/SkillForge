@@ -3,14 +3,15 @@
  *
  * Status tabs (upcoming / running / finished) map 1:1 to the backend's
  * `GET /api/contests?status=<tab>` filter. Registration here is a quick
- * optimistic action for the row itself — the detail page at
- * `/contests/:slug` is where participants go to actually see problems,
- * register / unregister explicitly, and participate.
+ * action for the row itself — the detail page at `/contests/:slug` is
+ * where participants go to actually see problems, register / unregister
+ * explicitly, and participate.
  *
- * The list endpoint does not expose a per-item `isRegistered` flag, so
- * we track registered slugs locally after a successful POST. A 409
- * `ALREADY_REGISTERED` also counts as "registered" so that repeat
- * clicks settle into the same UI state instead of surfacing an error.
+ * `isRegistered` is carried on each `ContestListItem` directly from the
+ * backend (it LEFT JOINs `contest_registrations` on the current actor),
+ * so the button state survives navigation without any client-side
+ * cache. After a successful register the list is reloaded so the flip
+ * reflects the authoritative source.
  */
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router";
@@ -79,9 +80,9 @@ function ContestListPanel({ status, active }: { status: ContestStatus; active: b
   const [data, setData] = useState<ContestListPage | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // Track optimistic registration state per-slug. The backend treats
-  // ALREADY_REGISTERED (409) as an idempotent success for UX purposes.
-  const [registered, setRegistered] = useState<Record<string, boolean>>({});
+  // Only the in-flight POST is tracked locally — the `isRegistered`
+  // flag itself is sourced from the list response, so the button
+  // state survives navigating away and back.
   const [registering, setRegistering] = useState<Record<string, boolean>>({});
 
   // Reset pagination whenever the tab changes.
@@ -112,13 +113,15 @@ function ContestListPanel({ status, active }: { status: ContestStatus; active: b
     setRegistering(prev => ({ ...prev, [c.slug]: true }));
     try {
       await api(`/contests/${c.slug}/register`, { method: "POST" });
-      setRegistered(prev => ({ ...prev, [c.slug]: true }));
       toast.success(`Registered for "${c.title}"`);
+      // Re-fetch so `isRegistered` flips via the authoritative source
+      // rather than a client-side override.
+      await reload();
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
-        // Idempotent from the user's perspective — we're in the right
-        // state anyway, so reflect it without surfacing noise.
-        setRegistered(prev => ({ ...prev, [c.slug]: true }));
+        // Idempotent from the user's perspective — reload so the row's
+        // `isRegistered` catches up and the button reflects reality.
+        await reload();
       } else {
         toast.error(e instanceof ApiError ? e.message : "Could not register");
       }
@@ -165,7 +168,7 @@ function ContestListPanel({ status, active }: { status: ContestStatus; active: b
           <ContestCard
             key={c.slug}
             contest={c}
-            registered={!!registered[c.slug]}
+            registered={!!c.isRegistered}
             registering={!!registering[c.slug]}
             onRegister={() => handleRegister(c)}
           />

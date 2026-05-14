@@ -75,7 +75,7 @@ export async function updateContest(contestId, fields, executor = db) {
 export const deleteContest = (contestId, executor = db) =>
   executor.none(`DELETE FROM contests WHERE id = $1`, [contestId]);
 
-export async function listContests({ limit, offset, status }, executor = db) {
+export async function listContests({ limit, offset, status, actorId }, executor = db) {
   const conditions = [];
   const args = [];
 
@@ -93,6 +93,14 @@ export async function listContests({ limit, offset, status }, executor = db) {
     SELECT COUNT(*)::int AS total FROM contests ${whereSql}
   `, args);
 
+  // The `actorId` parameter powers `isRegistered` per-row. We always
+  // provide a value (null when unauthenticated) so the placeholder slot
+  // stays consistent and the planner has a single prepared statement
+  // shape to cache.
+  const actorIdParam = actorId ?? null;
+  args.push(actorIdParam);
+  const actorIdPos = args.length;
+
   const rows = await executor.many(`
     SELECT
       c.id, c.slug, c.title, c.description, c.starts_at, c.ends_at,
@@ -102,7 +110,11 @@ export async function listContests({ limit, offset, status }, executor = db) {
         WHEN NOW() >= c.starts_at AND NOW() < c.ends_at THEN 'running'
         ELSE 'finished'
       END AS status,
-      (SELECT COUNT(*)::int FROM contest_registrations cr WHERE cr.contest_id = c.id) AS participant_count
+      (SELECT COUNT(*)::int FROM contest_registrations cr WHERE cr.contest_id = c.id) AS participant_count,
+      EXISTS (
+        SELECT 1 FROM contest_registrations cr
+        WHERE cr.contest_id = c.id AND cr.user_id = $${actorIdPos}
+      ) AS is_registered
     FROM contests c
     ${whereSql}
     ORDER BY c.starts_at DESC

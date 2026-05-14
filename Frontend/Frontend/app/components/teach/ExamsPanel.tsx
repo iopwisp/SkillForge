@@ -6,11 +6,11 @@
  * always allowed. The UI mirrors that by disabling those buttons with
  * a tooltip rather than letting the user click and hit a 4xx.
  *
- * Datetime fields use `<input type="datetime-local">` and we convert
- * the local-naive value to an ISO-with-offset string the backend's
- * `z.string().datetime({ offset: true })` accepts.
+ * Datetime fields use the shared `<DateTimePicker>` which emits ISO
+ * strings directly — backend's `z.string().datetime({ offset: true })`
+ * accepts them as-is.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Plus, Trash2, FileSignature, Calendar, Clock, AlertCircle,
   Pencil, ListPlus,
@@ -38,6 +38,8 @@ import type {
   ExamSummary, ExamDetail, GroupSummary,
 } from "~/lib/teaching-types";
 import { formatDateTime } from "~/lib/format";
+import { DateTimePicker } from "~/components/common/DateTimePicker";
+import { addDays, addMinutes, tomorrow9am } from "~/lib/datetime";
 
 const NO_GROUP = "__none__";
 
@@ -382,8 +384,9 @@ function ExamFormDialog({
   const [slug, setSlug] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [startsAt, setStartsAt] = useState("");
-  const [endsAt, setEndsAt] = useState("");
+  // ISO strings (DateTimePicker emits ISO directly).
+  const [startsAt, setStartsAt] = useState<string | null>(null);
+  const [endsAt, setEndsAt] = useState<string | null>(null);
   const [duration, setDuration] = useState(60);
   const [groupSlug, setGroupSlug] = useState<string>(NO_GROUP);
   const [submitting, setSubmitting] = useState(false);
@@ -393,15 +396,15 @@ function ExamFormDialog({
     if (!open) return;
     if (mode === "create") {
       setSlug(""); setTitle(""); setDescription("");
-      setStartsAt(""); setEndsAt("");
+      setStartsAt(null); setEndsAt(null);
       setDuration(60);
       setGroupSlug(NO_GROUP);
     } else if (initial) {
       setSlug(initial.slug);
       setTitle(initial.title);
       setDescription("");          // GET on the list doesn't include description
-      setStartsAt(toLocalInput(initial.startsAt));
-      setEndsAt(toLocalInput(initial.endsAt));
+      setStartsAt(initial.startsAt);
+      setEndsAt(initial.endsAt);
       setDuration(initial.durationMinutes);
       setGroupSlug(initial.groupSlug ?? NO_GROUP);
     }
@@ -415,23 +418,24 @@ function ExamFormDialog({
       .catch(() => {});
   }, [mode, open, initial, courseSlug]);
 
-  const minDate = useMemo(() => toLocalInput(new Date().toISOString()), []);
-
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const startsAtIso = fromLocalInput(startsAt);
-      const endsAtIso = fromLocalInput(endsAt);
-      if (!(new Date(endsAtIso) > new Date(startsAtIso))) {
+      if (!startsAt || !endsAt) {
+        toast.error("Выберите даты начала и окончания");
+        setSubmitting(false);
+        return;
+      }
+      if (!(new Date(endsAt) > new Date(startsAt))) {
         toast.error("End time must be after start time");
         setSubmitting(false);
         return;
       }
       const body: any = {
         title: title.trim(),
-        startsAt: startsAtIso,
-        endsAt: endsAtIso,
+        startsAt,
+        endsAt,
         durationMinutes: duration,
         groupSlug: groupSlug === NO_GROUP ? null : groupSlug,
         description: description.trim() || undefined,
@@ -452,6 +456,21 @@ function ExamFormDialog({
       setSubmitting(false);
     }
   }
+
+  const startPresets = [
+    { label: "Через 1 час",  getValue: () => addMinutes(new Date(), 60) },
+    { label: "Через 3 часа", getValue: () => addMinutes(new Date(), 180) },
+    { label: "Завтра 09:00", getValue: () => tomorrow9am() },
+    { label: "Через неделю", getValue: () => addDays(new Date(), 7) },
+  ];
+
+  const endPresets = startsAt
+    ? [
+      { label: "+1 час",  getValue: () => addMinutes(new Date(startsAt), 60) },
+      { label: "+2 часа", getValue: () => addMinutes(new Date(startsAt), 120) },
+      { label: "+3 часа", getValue: () => addMinutes(new Date(startsAt), 180) },
+    ]
+    : undefined;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -513,31 +532,25 @@ function ExamFormDialog({
             </div>
 
             <div className="grid sm:grid-cols-3 gap-3">
+              <DateTimePicker
+                id="exam-start"
+                label="Начало"
+                value={startsAt}
+                onChange={setStartsAt}
+                minDate={mode === "create" ? new Date() : undefined}
+                presets={startPresets}
+              />
+              <DateTimePicker
+                id="exam-end"
+                label="Конец"
+                value={endsAt}
+                onChange={setEndsAt}
+                minDate={startsAt ? new Date(startsAt) : (mode === "create" ? new Date() : undefined)}
+                durationFromValue={startsAt}
+                presets={endPresets}
+              />
               <div>
-                <Label htmlFor="exam-start">Starts at</Label>
-                <Input
-                  id="exam-start"
-                  type="datetime-local"
-                  required
-                  min={mode === "create" ? minDate : undefined}
-                  value={startsAt}
-                  onChange={(e) => setStartsAt(e.target.value)}
-                  className="mt-1.5"
-                />
-              </div>
-              <div>
-                <Label htmlFor="exam-end">Ends at</Label>
-                <Input
-                  id="exam-end"
-                  type="datetime-local"
-                  required
-                  value={endsAt}
-                  onChange={(e) => setEndsAt(e.target.value)}
-                  className="mt-1.5"
-                />
-              </div>
-              <div>
-                <Label htmlFor="exam-dur">Duration (min)</Label>
+                <Label htmlFor="exam-dur">Длительность (мин)</Label>
                 <Input
                   id="exam-dur"
                   type="number"
@@ -564,21 +577,4 @@ function ExamFormDialog({
 }
 
 /* ─── Datetime-local helpers ─────────────────────────────────────────────── */
-
-/** ISO string (with offset) -> "YYYY-MM-DDTHH:MM" suitable for datetime-local input. */
-function toLocalInput(iso: string): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return (
-    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
-    `T${pad(d.getHours())}:${pad(d.getMinutes())}`
-  );
-}
-
-/** datetime-local "YYYY-MM-DDTHH:MM" -> ISO with current local offset. */
-function fromLocalInput(local: string): string {
-  if (!local) return "";
-  const d = new Date(local);
-  return d.toISOString();   // UTC ISO is acceptable for `z.string().datetime({ offset: true })`
-}
+// (removed — now uses DateTimePicker which emits ISO directly)

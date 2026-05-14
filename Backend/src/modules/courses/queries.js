@@ -315,3 +315,36 @@ export const findGroupInCourse = (courseId, groupSlug, executor = db) =>
   executor.maybeOne(`
     SELECT id, slug, title FROM groups WHERE course_id = $1 AND slug = $2
   `, [courseId, groupSlug]);
+
+/* ─── browse (public catalog shape, any authenticated user) ─────────────── */
+
+/**
+ * Read-only view query backing the "Browse all" tab on `/courses`.
+ *
+ * Returns every course in the installation with a limited shape —
+ * title/description/owner/groupCount/studentCount — and explicitly
+ * does NOT include the problems list. STUDENTs still can't see the
+ * syllabus of courses they're not enrolled in (ADR 0008); this query
+ * is designed as a discoverability surface so students can find an
+ * instructor and ask for an invite code.
+ *
+ * `studentCount` counts distinct users that are a member of at least
+ * one group in the course.
+ */
+export const listAllCoursesForBrowse = (executor = db) =>
+  executor.many(`
+    SELECT
+      c.id, c.slug, c.title, c.description,
+      c.owner_id, c.created_at, c.updated_at,
+      u.username AS owner_username, u.full_name AS owner_full_name,
+      (SELECT COUNT(*)::int FROM groups g WHERE g.course_id = c.id) AS group_count,
+      (
+        SELECT COUNT(DISTINCT gm.user_id)::int
+        FROM groups g
+        JOIN group_members gm ON gm.group_id = g.id
+        WHERE g.course_id = c.id
+      ) AS student_count
+    FROM courses c
+    JOIN users u ON u.id = c.owner_id
+    ORDER BY c.created_at DESC, c.id DESC
+  `);
