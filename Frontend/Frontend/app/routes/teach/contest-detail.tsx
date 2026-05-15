@@ -22,8 +22,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import {
-  AlertCircle, ArrowLeft, Calendar, Check, FileText, Info, ListOrdered,
-  Lock, Plus, Save, Search, Send, Snowflake, Trash2, Trophy, Users,
+  AlertCircle, ArrowLeft, Calendar, CheckSquare, FileText, Info, ListOrdered,
+  Lock, Plus, Save, Search, Send, Snowflake, Square, Trash2, Trophy, Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, ApiError } from "~/lib/api";
@@ -39,9 +39,7 @@ import { Textarea } from "~/components/ui/textarea";
 import {
   Tabs, TabsContent, TabsList, TabsTrigger,
 } from "~/components/ui/tabs";
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "~/components/ui/select";
+import { Checkbox } from "~/components/ui/checkbox";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "~/components/ui/dialog";
@@ -584,23 +582,22 @@ function AttachContestProblemDialog({
   const [catalog, setCatalog] = useState<ProblemSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState<ProblemSummary | null>(null);
-  const [letter, setLetter] = useState<string>("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
 
-  // Pick the first unused letter as the default.
-  const defaultLetter = useMemo(() => {
+  // Available letters (not yet used by already-attached problems).
+  const availableLetters = useMemo(() => {
+    const letters: string[] = [];
     for (const code of "ABCDEFGHIJKLMNOPQRSTUVWXYZ") {
-      if (!usedLetters.has(code)) return code;
+      if (!usedLetters.has(code)) letters.push(code);
     }
-    return "";
+    return letters;
   }, [usedLetters]);
 
   useEffect(() => {
     if (!open) return;
     setQuery("");
-    setSelected(null);
-    setLetter(defaultLetter);
+    setSelected(new Set());
     setLoading(true);
     api<{ items: ProblemSummary[]; total: number; page: number; pageSize: number }>(
       "/problems?pageSize=200",
@@ -608,12 +605,17 @@ function AttachContestProblemDialog({
       .then((r) => setCatalog(r.items || []))
       .catch((e) => toast.error(e instanceof ApiError ? e.message : "Could not load problems"))
       .finally(() => setLoading(false));
-  }, [open, defaultLetter]);
+  }, [open]);
 
   const attachedSet = useMemo(() => new Set(attachedSlugs), [attachedSlugs]);
 
+  // All available (non-attached) problems — used for "select all" logic.
+  const available = useMemo(
+    () => catalog.filter(p => !attachedSet.has(p.slug)),
+    [catalog, attachedSet],
+  );
+
   const filtered = useMemo(() => {
-    const available = catalog.filter(p => !attachedSet.has(p.slug));
     const q = query.trim().toLowerCase();
     if (!q) return available.slice(0, 50);
     return available.filter(p =>
@@ -621,25 +623,71 @@ function AttachContestProblemDialog({
       p.slug.toLowerCase().includes(q) ||
       p.tags.some(t => t.toLowerCase().includes(q)),
     ).slice(0, 50);
-  }, [catalog, attachedSet, query]);
+  }, [available, query]);
+
+  // Letter assignments preview: map each selected problem to the next available letter.
+  const assignments = useMemo(() => {
+    const result: { problem: ProblemSummary; letter: string }[] = [];
+    // Maintain selection order based on catalog order for deterministic assignment.
+    const orderedSelected = available.filter(p => selected.has(p.slug));
+    for (let i = 0; i < orderedSelected.length; i++) {
+      const letter = i < availableLetters.length ? availableLetters[i] : "";
+      result.push({ problem: orderedSelected[i], letter });
+    }
+    return result;
+  }, [selected, available, availableLetters]);
+
+  const notEnoughLetters = selected.size > availableLetters.length;
+
+  function toggleProblem(problemSlug: string) {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(problemSlug)) {
+        next.delete(problemSlug);
+      } else {
+        next.add(problemSlug);
+      }
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    if (selected.size === available.length) {
+      // Deselect all.
+      setSelected(new Set());
+    } else {
+      // Select all available.
+      setSelected(new Set(available.map(p => p.slug)));
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!selected || !letter) return;
+    if (selected.size === 0 || notEnoughLetters) return;
     setSubmitting(true);
-    try {
-      await api(`/contests/${slug}/problems`, {
-        method: "POST",
-        body: { problemSlug: selected.slug, letter },
-      });
-      toast.success(`Attached "${selected.title}" as ${letter}`);
-      onOpenChange(false);
-      onAttached();
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "Could not attach problem");
-    } finally {
-      setSubmitting(false);
+    let successCount = 0;
+    let lastError: string | null = null;
+    for (const { problem, letter } of assignments) {
+      if (!letter) break;
+      try {
+        await api(`/contests/${slug}/problems`, {
+          method: "POST",
+          body: { problemSlug: problem.slug, letter },
+        });
+        successCount++;
+      } catch (e) {
+        lastError = e instanceof ApiError ? e.message : "Could not attach problem";
+      }
     }
+    setSubmitting(false);
+    if (successCount > 0) {
+      toast.success(`Добавлено задач: ${successCount}`);
+    }
+    if (lastError) {
+      toast.error(lastError);
+    }
+    onOpenChange(false);
+    onAttached();
   }
 
   return (
@@ -647,89 +695,134 @@ function AttachContestProblemDialog({
       <DialogContent className="max-w-lg">
         <form onSubmit={submit}>
           <DialogHeader>
-            <DialogTitle>Attach problem to contest</DialogTitle>
+            <DialogTitle>Добавить задачи в контест</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-3 my-3">
+            {/* Search */}
             <div>
-              <Label htmlFor="letter">Letter</Label>
-              <Select value={letter} onValueChange={setLetter}>
-                <SelectTrigger id="letter" className="mt-1.5 w-32">
-                  <SelectValue placeholder="Pick letter" />
-                </SelectTrigger>
-                <SelectContent className="max-h-72">
-                  {"ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").map(l => (
-                    <SelectItem key={l} value={l} disabled={usedLetters.has(l)}>
-                      {l}{usedLetters.has(l) ? " (used)" : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="problem-search">Problem</Label>
+              <Label htmlFor="problem-search">Поиск задач</Label>
               <div className="relative mt-1.5">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
                 <Input
                   id="problem-search"
                   value={query}
-                  onChange={(e) => { setQuery(e.target.value); setSelected(null); }}
-                  placeholder="Search by title, slug, or tag…"
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Поиск по названию, slug или тегу…"
                   className="pl-9"
                   autoComplete="off"
                 />
               </div>
-
-              <div className="mt-2 max-h-64 overflow-y-auto rounded-md border border-border bg-card">
-                {loading ? (
-                  <div className="p-4 text-sm text-muted-foreground">Loading catalog…</div>
-                ) : filtered.length === 0 ? (
-                  <div className="p-4 text-sm text-muted-foreground">
-                    {catalog.length === 0
-                      ? "No problems in the catalog. Create one first."
-                      : attachedSet.size > 0 && catalog.every(p => attachedSet.has(p.slug))
-                        ? "Every catalog problem is already attached."
-                        : "No problems match this search."}
-                  </div>
-                ) : (
-                  <ul className="divide-y divide-border">
-                    {filtered.map(p => {
-                      const isSelected = selected?.slug === p.slug;
-                      return (
-                        <li key={p.slug}>
-                          <button
-                            type="button"
-                            onClick={() => setSelected(p)}
-                            className={`w-full text-left px-3 py-2 flex items-center gap-3 hover:bg-accent/50 transition-colors ${
-                              isSelected ? "bg-primary/10" : ""
-                            }`}
-                          >
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium truncate text-sm">{p.title}</div>
-                              <code className="text-xs text-muted-foreground">{p.slug}</code>
-                            </div>
-                            <DifficultyBadge difficulty={p.difficulty} />
-                            {p.problemType && (
-                              <span className="text-[10px] text-muted-foreground shrink-0">
-                                {p.problemType}
-                              </span>
-                            )}
-                            {isSelected && <Check className="size-4 text-primary shrink-0" />}
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
             </div>
+
+            {/* Select all / Deselect all toggle */}
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={toggleAll}
+                className="text-xs text-primary hover:underline flex items-center gap-1.5"
+              >
+                {selected.size === available.length && available.length > 0 ? (
+                  <><Square className="size-3.5" /> Снять выделение</>
+                ) : (
+                  <><CheckSquare className="size-3.5" /> Выбрать все</>
+                )}
+              </button>
+              {selected.size > 0 && (
+                <span className="text-xs text-muted-foreground">
+                  Выбрано: {selected.size}
+                </span>
+              )}
+            </div>
+
+            {/* Problem list with checkboxes */}
+            <div className="max-h-56 overflow-y-auto rounded-md border border-border bg-card">
+              {loading ? (
+                <div className="p-4 text-sm text-muted-foreground">Загрузка каталога…</div>
+              ) : filtered.length === 0 ? (
+                <div className="p-4 text-sm text-muted-foreground">
+                  {catalog.length === 0
+                    ? "В каталоге нет задач. Сначала создайте задачу."
+                    : attachedSet.size > 0 && catalog.every(p => attachedSet.has(p.slug))
+                      ? "Все задачи из каталога уже добавлены."
+                      : "Нет задач, соответствующих поиску."}
+                </div>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {filtered.map(p => {
+                    const isChecked = selected.has(p.slug);
+                    return (
+                      <li key={p.slug}>
+                        <button
+                          type="button"
+                          onClick={() => toggleProblem(p.slug)}
+                          className={`w-full text-left px-3 py-2 flex items-center gap-3 hover:bg-accent/50 transition-colors ${
+                            isChecked ? "bg-primary/5" : ""
+                          }`}
+                        >
+                          <Checkbox
+                            checked={isChecked}
+                            tabIndex={-1}
+                            className="pointer-events-none"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium truncate text-sm">{p.title}</div>
+                            <code className="text-xs text-muted-foreground">{p.slug}</code>
+                          </div>
+                          <DifficultyBadge difficulty={p.difficulty} />
+                          {p.problemType && (
+                            <span className="text-[10px] text-muted-foreground shrink-0">
+                              {p.problemType}
+                            </span>
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+
+            {/* Letter assignment preview */}
+            {assignments.length > 0 && (
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Назначение букв</Label>
+                <div className="max-h-28 overflow-y-auto rounded-md border border-border bg-muted/30 px-3 py-2 space-y-1">
+                  {assignments.map(({ problem, letter }) => (
+                    <div key={problem.slug} className="flex items-center gap-2 text-sm">
+                      {letter ? (
+                        <span className="inline-flex size-5 items-center justify-center rounded bg-primary/10 text-primary text-xs font-semibold shrink-0">
+                          {letter}
+                        </span>
+                      ) : (
+                        <span className="inline-flex size-5 items-center justify-center rounded bg-rose-500/10 text-rose-500 text-xs font-semibold shrink-0">
+                          ?
+                        </span>
+                      )}
+                      <span className="truncate">{problem.title}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Error: not enough letters */}
+            {notEnoughLetters && (
+              <div className="rounded-md border border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-400 px-3 py-2 text-sm flex items-center gap-2">
+                <AlertCircle className="size-4 shrink-0" />
+                Недостаточно свободных букв. Доступно: {availableLetters.length}, выбрано: {selected.size}.
+              </div>
+            )}
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button type="submit" disabled={submitting || !selected || !letter}>
-              {submitting ? "Attaching…" : selected ? `Attach as ${letter}` : "Attach"}
+            <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Отмена</Button>
+            <Button type="submit" disabled={submitting || selected.size === 0 || notEnoughLetters}>
+              {submitting
+                ? "Добавление…"
+                : selected.size > 0
+                  ? `Добавить (${selected.size})`
+                  : "Добавить"}
             </Button>
           </DialogFooter>
         </form>
