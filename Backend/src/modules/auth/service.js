@@ -22,14 +22,47 @@
 import jwt from 'jsonwebtoken';
 import crypto from 'node:crypto';
 
+import { withTransaction } from '../../shared/db.js';
 import { HttpError } from '../../shared/errors.js';
+import { logger } from '../../shared/logger.js';
 import { hashPassword, verifyPassword } from './lib.js';
 import { getProviderOrThrow, listProviders } from './providers/index.js';
 import * as q from './queries.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'skillforge-dev-secret-change-me';
+const DEV_JWT_SECRET_FALLBACK = 'skillforge-dev-secret-change-me';
+
+/**
+ * Guard against shipping a production deployment with an obvious or
+ * missing JWT secret. We do this at module-load time so a misconfigured
+ * Render / Helm / Compose deploy refuses to boot rather than silently
+ * issuing tokens an attacker can forge. The dev fallback is preserved
+ * for local development and tests where secrets aren't configured.
+ *
+ * Production refuses when:
+ *   - JWT_SECRET is unset, OR
+ *   - JWT_SECRET equals the dev fallback string, OR
+ *   - JWT_SECRET is shorter than 32 chars (NIST SP 800-131A floor).
+ */
+function resolveJwtSecret() {
+  const isProd = process.env.NODE_ENV === 'production';
+  const value = process.env.JWT_SECRET;
+  if (isProd) {
+    if (!value || value === DEV_JWT_SECRET_FALLBACK || value.length < 32) {
+      throw new Error(
+        'JWT_SECRET is required in production and must be a non-default secret of at least 32 characters. '
+        + 'Set JWT_SECRET to a long random string (e.g. `openssl rand -base64 48`).',
+      );
+    }
+    return value;
+  }
+  return value || DEV_JWT_SECRET_FALLBACK;
+}
+
+const JWT_SECRET = resolveJwtSecret();
 const ACCESS_TTL = parseInt(process.env.JWT_ACCESS_TTL || '900', 10); // 15 min
-const REFRESH_TTL = parseInt(process.env.JWT_REFRESH_TTL || '2592000', 10); // 30 days
+// 7-day default — short enough that a leaked refresh token times out
+// quickly, long enough that students don't get bounced out mid-week.
+const REFRESH_TTL = parseInt(process.env.JWT_REFRESH_TTL || '604800', 10); // 7 days
 
 /* ─── password helpers (re-exported for users.service password change) ── */
 
@@ -108,15 +141,36 @@ export async function login(data) {
 
 export async function refresh(refreshToken) {
   if (!refreshToken) throw new HttpError(400, 'refreshToken is required');
-  const row = await q.findActiveRefreshToken(refreshToken);
-  if (!row) throw new HttpError(401, 'Invalid or expired refresh token');
-  if (new Date(row.expires_at) < new Date()) {
-    throw new HttpError(401, 'Invalid or expired refresh token');
-  }
-  await q.revokeRefreshTokenById(row.id);
-  const user = await q.findUserById(row.user_id);
-  if (!user) throw new HttpError(401, 'Invalid or expired refresh token');
-  return buildAuthResponse(user);
+
+  // Wrap in a transaction + row-level lock so two concurrent refresh
+  // calls with the same refresh token can't both rotate it. The first
+  // wins; the second sees a revoked row and triggers refresh-family
+  // invalidation (full revoke for that user) per OWASP guidance.
+  return withTransaction(async (tx) => {
+    const row = await q.findRefreshTokenForUpdate(refreshToken, tx);
+    if (!row) {
+      throw new HttpError(401, 'Invalid or expired refresh token');
+    }
+    if (row.revoked) {
+      // Token reuse detected — the legitimate session would have got
+      // a brand-new token already. Treat this as compromise of the
+      // refresh family and revoke ALL tokens for the user so the
+      // attacker's path is closed.
+      logger.warn(
+        { userId: row.user_id, tokenId: row.id },
+        'Refresh token reuse detected — revoking all sessions for user',
+      );
+      await q.revokeAllRefreshTokensForUser(row.user_id, tx);
+      throw new HttpError(401, 'Invalid or expired refresh token');
+    }
+    if (new Date(row.expires_at) < new Date()) {
+      throw new HttpError(401, 'Invalid or expired refresh token');
+    }
+    await q.revokeRefreshTokenById(row.id, tx);
+    const user = await q.findUserById(row.user_id, tx);
+    if (!user) throw new HttpError(401, 'Invalid or expired refresh token');
+    return buildAuthResponse(user);
+  });
 }
 
 export async function logout(refreshToken) {
@@ -173,4 +227,15 @@ export async function exchangeOAuthCode(providerName, code) {
     throw new HttpError(400, `Provider "${providerName}" does not support direct code exchange`);
   }
   return buildAuthResponse(await provider.exchangeCode(code));
+}
+
+/* ─── operational helpers ───────────────────────────────────────────────── */
+
+/**
+ * Periodic sweeper for stale oauth_states rows. Wired into the boot
+ * lifecycle in `src/index.js` and runs once per hour. Returns the
+ * number of rows deleted, useful for log lines.
+ */
+export function sweepExpiredOAuthStates() {
+  return q.deleteExpiredOAuthStates();
 }

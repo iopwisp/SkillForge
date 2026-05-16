@@ -108,14 +108,24 @@ export async function deleteContest(actor, slug) {
 
 /**
  * Get contest detail with computed status.
+ *
+ * Privacy: students (and unauthenticated visitors) cannot see the
+ * detail of a private contest unless they're already registered. We
+ * 404 rather than 403 so the existence of unrelated private contests
+ * doesn't leak through the auth layer.
  */
 export async function getContest(actor, slug) {
   const contest = await q.findContestBySlug(slug);
   if (!contest) throw new HttpError(404, 'Contest not found');
 
+  const isStaff = actor?.role === 'INSTRUCTOR' || actor?.role === 'ADMIN';
+  const registration = actor ? await q.findRegistration(contest.id, actor.id) : null;
+  if (!contest.is_public && !isStaff && !registration) {
+    throw new HttpError(404, 'Contest not found');
+  }
+
   const problems = await q.listContestProblems(contest.id);
   const participantCount = await q.countRegistrations(contest.id);
-  const registration = actor ? await q.findRegistration(contest.id, actor.id) : null;
   const participation = actor ? await q.findActiveParticipation(contest.id, actor.id) : null;
 
   const status = computeStatus(contest);
@@ -138,11 +148,14 @@ export async function getContest(actor, slug) {
 
 /**
  * List contests with pagination and status filter.
+ *
+ * Privacy: students see public contests + any private contest they
+ * are personally registered for. Instructors / admins see everything.
  */
 export async function listContests(actor, { page, pageSize, status }) {
   const offset = (Math.max(page, 1) - 1) * pageSize;
   const { rows, total } = await q.listContests({
-    limit: pageSize, offset, status, actorId: actor?.id ?? null,
+    limit: pageSize, offset, status, actorId: actor?.id ?? null, actorRole: actor?.role ?? null,
   });
 
   return {
@@ -405,7 +418,7 @@ export async function participate(actor, slug, { virtual } = {}) {
  * carries it, and the worker's finalize hook calls back into
  * `onContestSubmissionFinalized(submissionId)` for standing recompute.
  */
-export async function submitInContest(actor, slug, letter, { code, language }) {
+export async function submitInContest(actor, slug, letter, { code, language }, { idempotencyKey } = {}) {
   const contest = await q.findContestBySlug(slug);
   if (!contest) throw new HttpError(404, 'Contest not found');
 
@@ -434,6 +447,7 @@ export async function submitInContest(actor, slug, letter, { code, language }) {
     code,
     language,
     contestParticipationId: participation.id,
+    idempotencyKey: idempotencyKey ?? null,
   });
 
   await q.insertContestSubmission({

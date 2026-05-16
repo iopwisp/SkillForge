@@ -211,7 +211,7 @@ export async function startAttempt(actor, courseSlug, examSlug) {
  *  exam's problems. Runs the regular judge pipeline via the submissions
  *  service, which persists the row with `exam_attempt_id` set. */
 export async function submitInAttempt(
-  actor, courseSlug, examSlug, problemSlug, { code, language },
+  actor, courseSlug, examSlug, problemSlug, { code, language }, { idempotencyKey } = {},
 ) {
   const { course, exam } = await resolveExamOr404(courseSlug, examSlug);
   if (actor.role !== STUDENT) {
@@ -246,6 +246,7 @@ export async function submitInAttempt(
     code,
     language,
     examAttemptId: attempt.id,
+    idempotencyKey: idempotencyKey ?? null,
   });
 }
 

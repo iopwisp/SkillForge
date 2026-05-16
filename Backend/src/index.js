@@ -16,12 +16,19 @@ import { logger } from './shared/logger.js';
 import { runMigrations } from './shared/migrations.js';
 import { captureException, initSentry, isSentryEnabled } from './shared/sentry.js';
 import { removeSeededUsers, runSeed } from './shared/seed/index.js';
+import { sweepExpiredOAuthStates } from './modules/auth/service.js';
 
 initSentry();
 
 const app = createApp();
 
 const port = parseInt(process.env.PORT || '4000', 10);
+
+// Hourly sweep interval for expired oauth_states rows. Held at module
+// scope so the SIGTERM handler can clear it on shutdown.
+const ONE_HOUR_MS = 60 * 60 * 1000;
+let oauthSweepTimer = null;
+let httpServer = null;
 
 async function main() {
   await runMigrations();
@@ -30,7 +37,7 @@ async function main() {
   // immediately. Express's default host depends on the Node version and
   // some Alpine builds resolve "localhost" to ::1 only, which Render's
   // health checker can't reach. Listening on 0.0.0.0 is unambiguous.
-  app.listen(port, '0.0.0.0', () => {
+  httpServer = app.listen(port, '0.0.0.0', () => {
     logger.info(
       {
         port,
@@ -44,6 +51,8 @@ async function main() {
     );
   });
 
+  registerShutdownHandlers();
+
   // Seed and one-off cleanup tasks run AFTER the HTTP server is up.
   // Otherwise on a cold first deploy with an empty DB, runSeed() can
   // take 30–60 seconds and Render's health probe times out before we
@@ -56,6 +65,22 @@ async function main() {
     logger.error({ err }, 'Post-boot tasks failed');
     captureException(err);
   });
+
+  // Sweep expired OAuth state rows once per hour. Without this the
+  // table grows unboundedly on a long-running deployment because the
+  // happy-path callback already deletes the row on success but failed
+  // / abandoned login attempts leave their state row behind.
+  oauthSweepTimer = setInterval(() => {
+    void sweepExpiredOAuthStates()
+      .then((removed) => {
+        if (removed > 0) {
+          logger.info({ removed }, 'Swept expired oauth_states rows');
+        }
+      })
+      .catch((err) => logger.warn({ err }, 'oauth_states sweep failed'));
+  }, ONE_HOUR_MS);
+  // Don't keep the event loop alive solely on this timer.
+  if (oauthSweepTimer.unref) oauthSweepTimer.unref();
 }
 
 async function postBootTasks() {
@@ -69,6 +94,50 @@ async function postBootTasks() {
   if (removedSeededUsers > 0) {
     logger.info({ removed: removedSeededUsers }, 'Removed seeded accounts from the database');
   }
+}
+
+/**
+ * Stop accepting new connections, drain in-flight requests, then close
+ * the database pool. SIGTERM is what Render / Kubernetes / docker
+ * compose down send; SIGINT is Ctrl-C in dev. We give the HTTP server
+ * 25 seconds to drain — Render's default kill window is 30 s, which
+ * leaves us a margin to actually call `db.close()`.
+ */
+function registerShutdownHandlers() {
+  let shuttingDown = false;
+  const shutdown = (signal) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    logger.info({ signal }, 'Graceful shutdown initiated');
+
+    if (oauthSweepTimer) clearInterval(oauthSweepTimer);
+
+    const done = (err) => {
+      if (err) logger.warn({ err }, 'Error during shutdown');
+      db.close()
+        .catch((closeErr) => logger.warn({ err: closeErr }, 'pg pool close failed'))
+        .finally(() => process.exit(err ? 1 : 0));
+    };
+
+    const forceTimer = setTimeout(() => {
+      logger.warn('Force-exit after 25 s drain timeout');
+      done(new Error('drain timeout'));
+    }, 25_000);
+    if (forceTimer.unref) forceTimer.unref();
+
+    if (httpServer) {
+      httpServer.close((err) => {
+        clearTimeout(forceTimer);
+        done(err);
+      });
+    } else {
+      clearTimeout(forceTimer);
+      done();
+    }
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
 main().catch((error) => {

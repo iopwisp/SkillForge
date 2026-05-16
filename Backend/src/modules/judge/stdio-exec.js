@@ -31,6 +31,32 @@ const STDERR_TAIL_BYTES = 4096;
 const RSS_POLL_INTERVAL_MS = 20;
 
 /**
+ * Normalise `problem.test_cases_json` into a real array.
+ *
+ * Postgres returns the underlying TEXT column as a JSON-encoded string.
+ * If we don't parse here, every iteration becomes character-by-character
+ * over the JSON source — `tc.stdin` and `tc.expected_stdout` are
+ * undefined, the comparator silently treats undefined-vs-empty-stdout as
+ * a match, and empty-code submissions land as ACCEPTED. Critical bug
+ * found in the senior review.
+ *
+ * Accepts either a string (production via `pg`) or an array (tests that
+ * pass a constructed problem object directly).
+ */
+function parseTestCases(raw) {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === 'string' && raw.length > 0) {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+/**
  * Execute a single test case for an STDIO problem.
  *
  * @param {{ cmd: string, args: string[], workdir: string }} runStep
@@ -402,6 +428,14 @@ export async function runStdioJudge(problem, code, language) {
  */
 async function runStdioJudgeLocal(problem, code, language) {
   const workdir = mkdtempSync(join(tmpdir(), 'stdio-judge-'));
+  // Normalise: pg returns TEXT columns as JSON strings. Parse once at the
+  // entry so the rest of this function can iterate over an array. Without
+  // this, `problem.test_cases_json` is a JSON string and `for (i = 0; i < .length)`
+  // iterates over its characters — every test case becomes a single
+  // character with `tc.stdin === undefined`, which the comparator silently
+  // accepts as "matching" empty stdout. That's the "ACCEPTED on empty code"
+  // bug shipped to prod.
+  const testCases = parseTestCases(problem.test_cases_json);
 
   try {
     // 1. Prepare (compile if needed)
@@ -413,7 +447,7 @@ async function runStdioJudgeLocal(problem, code, language) {
         runtimeMs: 0,
         memoryKb: 0,
         testsPassed: 0,
-        testsTotal: problem.test_cases_json.length,
+        testsTotal: testCases.length,
         output: JSON.stringify({ perTestResults: [] }),
         error: prepared.diagnostic || 'Runtime is not installed',
         beats: null,
@@ -426,7 +460,7 @@ async function runStdioJudgeLocal(problem, code, language) {
         runtimeMs: 0,
         memoryKb: 0,
         testsPassed: 0,
-        testsTotal: problem.test_cases_json.length,
+        testsTotal: testCases.length,
         output: JSON.stringify({ perTestResults: [] }),
         error: prepared.diagnostic,
         beats: null,
@@ -434,7 +468,6 @@ async function runStdioJudgeLocal(problem, code, language) {
     }
 
     // 2. Run test cases in declared order, stop on first failure
-    const testCases = problem.test_cases_json;
     const perTestResults = [];
     let maxTimeMs = 0;
     let maxMemoryMb = 0;
@@ -503,6 +536,9 @@ async function runStdioJudgeLocal(problem, code, language) {
  */
 async function runStdioJudgeDocker(problem, code, language) {
   const workdir = mkdtempSync(join(tmpdir(), 'stdio-judge-'));
+  // See runStdioJudgeLocal for why this normalisation is critical — pg
+  // returns TEXT as a JSON string, not an array.
+  const testCases = parseTestCases(problem.test_cases_json);
   const canonical = canonicalLanguage(language);
   if (!canonical) {
     try { rmSync(workdir, { recursive: true, force: true }); } catch { /* ignore */ }
@@ -511,7 +547,7 @@ async function runStdioJudgeDocker(problem, code, language) {
       runtimeMs: 0,
       memoryKb: 0,
       testsPassed: 0,
-      testsTotal: problem.test_cases_json.length,
+      testsTotal: testCases.length,
       output: JSON.stringify({ perTestResults: [] }),
       error: `Unsupported language: ${language}`,
       beats: null,
@@ -523,7 +559,7 @@ async function runStdioJudgeDocker(problem, code, language) {
   const image = CONFIGURED_IMAGES[canonical]();
   const timeout = computeSubmissionTimeout(
     problem.time_limit_ms,
-    problem.test_cases_json.length,
+    testCases.length,
     isCompiledLanguage(canonical),
   );
 
@@ -553,7 +589,7 @@ async function runStdioJudgeDocker(problem, code, language) {
           runtimeMs: 0,
           memoryKb: 0,
           testsPassed: 0,
-          testsTotal: problem.test_cases_json.length,
+          testsTotal: testCases.length,
           output: JSON.stringify({ perTestResults: [] }),
           error: compileResult.stderr.slice(0, 8192),
           beats: null,
@@ -568,9 +604,9 @@ async function runStdioJudgeDocker(problem, code, language) {
     let testsPassed = 0;
     const runCmd = getRunCmd(canonical);
 
-    for (let i = 0; i < problem.test_cases_json.length; i++) {
+    for (let i = 0; i < testCases.length; i++) {
       if (timedOut) break;
-      const tc = problem.test_cases_json[i];
+      const tc = testCases[i];
 
       const exec = await execInContainer(handle, runCmd, {
         stdin: tc.stdin,
@@ -611,7 +647,7 @@ async function runStdioJudgeDocker(problem, code, language) {
         runtimeMs: timeout,
         memoryKb: 0,
         testsPassed: 0,
-        testsTotal: problem.test_cases_json.length,
+        testsTotal: testCases.length,
         output: JSON.stringify({ perTestResults: [] }),
         error: 'Submission exceeded aggregate time budget',
         beats: null,
@@ -626,7 +662,7 @@ async function runStdioJudgeDocker(problem, code, language) {
       runtimeMs: maxTimeMs,
       memoryKb: Math.round(maxMemoryMb * 1024),
       testsPassed,
-      testsTotal: problem.test_cases_json.length,
+      testsTotal: testCases.length,
       output: JSON.stringify({ perTestResults }),
       error: null,
       beats: null,
@@ -638,7 +674,7 @@ async function runStdioJudgeDocker(problem, code, language) {
         runtimeMs: 0,
         memoryKb: 0,
         testsPassed: 0,
-        testsTotal: problem.test_cases_json.length,
+        testsTotal: testCases.length,
         output: JSON.stringify({ perTestResults: [] }),
         error: err.message,
         beats: null,
@@ -649,7 +685,7 @@ async function runStdioJudgeDocker(problem, code, language) {
       runtimeMs: 0,
       memoryKb: 0,
       testsPassed: 0,
-      testsTotal: problem.test_cases_json.length,
+      testsTotal: testCases.length,
       output: JSON.stringify({ perTestResults: [] }),
       error: err.message || 'Unknown judge error',
       beats: null,

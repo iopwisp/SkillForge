@@ -116,7 +116,11 @@ export function gradebookToCsv(gradebook) {
     ].map(csvCell).join(','))),
   ];
 
-  return `${lines.join('\n')}\n`;
+  // UTF-8 BOM (\uFEFF) so Excel on Windows opens the file with the
+  // correct encoding instead of mangling Cyrillic / Kazakh names. The
+  // BOM is invisible in non-Excel viewers and idiomatic for CSVs that
+  // need to round-trip through Office on Windows.
+  return `\uFEFF${lines.join('\n')}\n`;
 }
 
 /* ─── write ─────────────────────────────────────────────────────────────── */

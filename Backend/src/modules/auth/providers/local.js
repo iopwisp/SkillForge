@@ -34,6 +34,11 @@ export const localProvider = {
    */
   async register({ username, email, password, fullName }) {
     return withTransaction(async (tx) => {
+      // Serialise concurrent first-user registrations so two parallel
+      // POSTs against an empty database can't both observe
+      // `isFirstUser() === true` and both insert as ADMIN.
+      await q.acquireBootstrapLock(tx);
+
       if (await q.findUserByUsernameOrEmailExact(username, email, tx)) {
         throw new HttpError(409, 'Username or email already taken');
       }

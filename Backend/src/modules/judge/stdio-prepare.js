@@ -48,16 +48,44 @@ const STDIO_DOCKER_IMAGES = {
  * - 'auto' (default): probe Docker daemon (2 s ceiling); use Docker if available,
  *   otherwise fall back to local.
  *
+ * The `auto` probe result is memoised in a module-level variable so we
+ * spawn `docker info` exactly once per process — running it on every
+ * submission was burning ~50–200 ms per submission on the worker hot
+ * path. The cache is keyed off the resolved env value, so changing
+ * `JUDGE_RUNTIME_MODE` at runtime (tests) and re-importing the module
+ * still gives the right answer.
+ *
  * @returns {'local' | 'docker' | 'off'}
  */
+let cachedRuntimeMode = null;
+let cachedRuntimeModeEnv = null;
+
 export function getStdioRuntimeMode() {
-  const mode = (process.env.JUDGE_RUNTIME_MODE || 'auto').toLowerCase();
-  if (mode === 'off') return 'off';
-  if (mode === 'docker') return 'docker';
-  if (mode === 'local') return 'local';
+  const envValue = (process.env.JUDGE_RUNTIME_MODE || 'auto').toLowerCase();
+  if (cachedRuntimeMode !== null && cachedRuntimeModeEnv === envValue) {
+    return cachedRuntimeMode;
+  }
+
+  let resolved;
+  if (envValue === 'off') resolved = 'off';
+  else if (envValue === 'docker') resolved = 'docker';
+  else if (envValue === 'local') resolved = 'local';
   // auto: probe Docker daemon with a 2 s ceiling
-  if (isDockerAvailable()) return 'docker';
-  return 'local';
+  else resolved = isDockerAvailable() ? 'docker' : 'local';
+
+  cachedRuntimeMode = resolved;
+  cachedRuntimeModeEnv = envValue;
+  return resolved;
+}
+
+/**
+ * Test-only escape hatch — clears the memoised result so a test that
+ * flips `JUDGE_RUNTIME_MODE` mid-process can pick up the new value.
+ * Not used in production.
+ */
+export function _resetStdioRuntimeModeCache() {
+  cachedRuntimeMode = null;
+  cachedRuntimeModeEnv = null;
 }
 
 /**

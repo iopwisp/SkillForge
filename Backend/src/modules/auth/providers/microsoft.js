@@ -109,9 +109,36 @@ export const microsoftProvider = {
    * Available iff the deployment configured both `MICROSOFT_CLIENT_ID` and
    * `MICROSOFT_CLIENT_SECRET`. Re-checked on every call so a restart after
    * adding env vars picks them up immediately.
+   *
+   * In production we additionally:
+   *   - refuse to enable the provider if `MICROSOFT_TENANT_ID` is unset
+   *     or set to the multi-tenant `'common'` value, which would skip
+   *     issuer validation;
+   *   - refuse to enable if `MICROSOFT_REDIRECT_URI` is unset or points
+   *     at localhost (which would otherwise bounce the callback to the
+   *     operator's laptop instead of the deployed instance).
    */
   enabled() {
-    return !!process.env.MICROSOFT_CLIENT_ID && !!process.env.MICROSOFT_CLIENT_SECRET;
+    if (!process.env.MICROSOFT_CLIENT_ID || !process.env.MICROSOFT_CLIENT_SECRET) return false;
+    if (process.env.NODE_ENV === 'production') {
+      const tenant = process.env.MICROSOFT_TENANT_ID;
+      if (!tenant || tenant === 'common') {
+        logger.error(
+          { tenant: tenant || '(unset)' },
+          'Microsoft OAuth disabled in production: MICROSOFT_TENANT_ID must be set to a specific tenant GUID, not "common"',
+        );
+        return false;
+      }
+      const redirect = process.env.MICROSOFT_REDIRECT_URI || '';
+      if (!redirect || /localhost|127\.0\.0\.1/i.test(redirect)) {
+        logger.error(
+          { redirect },
+          'Microsoft OAuth disabled in production: MICROSOFT_REDIRECT_URI must be set to a non-localhost URL',
+        );
+        return false;
+      }
+    }
+    return true;
   },
 
   async buildAuthUrl({ next } = {}) {
@@ -245,15 +272,22 @@ async function exchangeCodeForTokens(code) {
 async function validateIdToken(idToken, expectedNonce) {
   const clientId = process.env.MICROSOFT_CLIENT_ID;
   const tenant = getTenantId();
+  const isProd = process.env.NODE_ENV === 'production';
 
   const jwksUrl = buildAzureUrl('discovery/v2.0/keys');
   const JWKS = jose.createRemoteJWKSet(new URL(jwksUrl));
 
-  // Build issuer pattern — Azure AD v2.0 issuer format
-  // For 'common' tenant, we accept any issuer matching the pattern
+  // Build issuer pattern — Azure AD v2.0 issuer format. In production we
+  // require a concrete tenant GUID and always validate the issuer; the
+  // multi-tenant 'common' value is rejected at boot in `enabled()`.
+  // Outside production we still allow 'common' for local development.
   const issuer = tenant === 'common'
-    ? undefined // Skip issuer check for multi-tenant
+    ? undefined // Skip issuer check for multi-tenant (dev only)
     : `https://login.microsoftonline.com/${tenant}/v2.0`;
+
+  if (isProd && !issuer) {
+    throw new Error('Microsoft OAuth misconfigured: tenant must be set in production');
+  }
 
   const verifyOptions = {
     audience: clientId,
@@ -268,6 +302,17 @@ async function validateIdToken(idToken, expectedNonce) {
   // Verify nonce if provided (redirect flow has nonce, SPA flow may not)
   if (expectedNonce && payload.nonce !== expectedNonce) {
     throw new Error('id_token nonce mismatch');
+  }
+
+  // Reject explicitly unverified emails. Microsoft sometimes omits this
+  // claim entirely (treated as unknown → accepted), but a strict `false`
+  // means the user has not proved control of the email and we must not
+  // mint a session for them. Linking by email below would otherwise
+  // grant a stranger access to the legitimate account-holder's data.
+  if (payload.email_verified === false) {
+    const e = new Error('Microsoft id_token reports email_verified=false');
+    e.code = 'EMAIL_NOT_VERIFIED';
+    throw e;
   }
 
   return payload;
@@ -302,8 +347,12 @@ async function loginOrCreateWithMicrosoft(payload) {
     }
   }
 
-  // 3. Create new user within a transaction (first-user-becomes-ADMIN)
+  // 3. Create new user within a transaction (first-user-becomes-ADMIN).
+  // The advisory lock serialises this branch so two concurrent OAuth
+  // callbacks against an empty DB cannot both observe `isFirstUser`
+  // returning true.
   return withTransaction(async (tx) => {
+    await q.acquireBootstrapLock(tx);
     const role = (await q.isFirstUser(tx)) ? 'ADMIN' : 'STUDENT';
     const username = await deriveUsername(email, name);
     const newUser = await q.insertMicrosoftUser({

@@ -8,7 +8,8 @@
  */
 import { Router } from 'express';
 
-import { asyncHandler, fromZod } from '../../shared/errors.js';
+import { asyncHandler, fromZod, HttpError } from '../../shared/errors.js';
+import { userRateLimit } from '../../shared/middleware/rate-limit.js';
 import { requireAuth, requireRole, ROLES } from '../auth/middleware.js';
 import {
   AttachExamProblemSchema, CreateExamSchema, SubmitInAttemptSchema, UpdateExamSchema,
@@ -18,6 +19,20 @@ import * as exams from './service.js';
 const router = Router({ mergeParams: true });
 
 const requireInstructor = requireRole(ROLES.INSTRUCTOR, ROLES.ADMIN);
+const examSubmitLimiter = userRateLimit({ windowMs: 60_000, max: 60 });
+
+// Same regex used in submissions/routes.js. Kept inline here rather
+// than promoted to a shared helper so the contract (URL-safe ASCII,
+// 8–64 chars) lives next to the only two routes that consume it.
+const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._~:-]{8,64}$/;
+function readIdempotencyKey(req) {
+  const raw = req.get('Idempotency-Key');
+  if (!raw) return null;
+  if (!IDEMPOTENCY_KEY_PATTERN.test(raw)) {
+    throw new HttpError(400, 'Invalid Idempotency-Key (must be URL-safe ASCII, 8–64 chars)');
+  }
+  return raw;
+}
 
 /* ─── list + detail ─────────────────────────────────────────────────────── */
 
@@ -82,6 +97,7 @@ router.post('/:examSlug/attempts', requireAuth, asyncHandler(async (req, res) =>
 router.post(
   '/:examSlug/attempts/current/submissions/:problemSlug',
   requireAuth,
+  examSubmitLimiter,
   asyncHandler(async (req, res) => {
     const parsed = SubmitInAttemptSchema.safeParse(req.body);
     if (!parsed.success) throw fromZod(parsed.error);
@@ -94,6 +110,7 @@ router.post(
         req.params.examSlug,
         req.params.problemSlug,
         parsed.data,
+        { idempotencyKey: readIdempotencyKey(req) },
       ),
     );
   }),

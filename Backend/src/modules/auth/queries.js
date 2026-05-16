@@ -64,6 +64,20 @@ export const isFirstUser = async (executor = db) => {
   return !row;
 };
 
+/**
+ * Acquire a transaction-scoped Postgres advisory lock keyed off a
+ * constant. Used to serialise the "first user becomes ADMIN"
+ * bootstrap path so two concurrent registrations on a fresh database
+ * cannot both observe `isFirstUser() === true` and both insert as
+ * ADMIN. The lock is released automatically on COMMIT/ROLLBACK.
+ *
+ * Caller MUST be inside a transaction (`withTransaction`). The chosen
+ * key (7233181) is arbitrary but documented so future advisory locks
+ * pick distinct keys.
+ */
+export const acquireBootstrapLock = (executor = db) =>
+  executor.none(`SELECT pg_advisory_xact_lock(7233181)`);
+
 export function linkGoogleToUser(userId, { googleId, avatarUrl, fullName }, executor = db) {
   return executor.none(`
     UPDATE users
@@ -131,6 +145,18 @@ export function insertRefreshToken({ userId, token, expiresAt }, executor = db) 
 export const findActiveRefreshToken = (token, executor = db) =>
   executor.maybeOne(`SELECT * FROM refresh_tokens WHERE token = $1 AND revoked = FALSE`, [token]);
 
+/**
+ * Same as `findActiveRefreshToken` but takes a row-level lock so two
+ * concurrent refresh attempts on the same token can't both rotate it
+ * to a new pair. Caller MUST be inside a transaction (`withTransaction`).
+ *
+ * Returns the row regardless of `revoked` — the service inspects that
+ * field to detect token reuse and trigger refresh-family invalidation
+ * (revoke all tokens for the user) per OWASP guidance.
+ */
+export const findRefreshTokenForUpdate = (token, executor = db) =>
+  executor.maybeOne(`SELECT * FROM refresh_tokens WHERE token = $1 FOR UPDATE`, [token]);
+
 export function revokeRefreshTokenById(id, executor = db) {
   return executor.none(`UPDATE refresh_tokens SET revoked = TRUE WHERE id = $1`, [id]);
 }
@@ -149,9 +175,33 @@ export function insertOAuthState({ state, redirect }, executor = db) {
   return executor.none(`INSERT INTO oauth_states (state, redirect) VALUES ($1, $2)`, [state, redirect]);
 }
 
+/**
+ * Look up an unused, unexpired oauth_states row. The expires_at filter
+ * (added in migration 0013) ensures a state row that was issued more
+ * than 15 minutes ago can no longer be used to complete a callback —
+ * this defends against an attacker who captures a state value in
+ * transit and tries to replay it well after the user abandoned the
+ * login flow.
+ */
 export const findOAuthState = (state, executor = db) =>
-  executor.maybeOne(`SELECT * FROM oauth_states WHERE state = $1`, [state]);
+  executor.maybeOne(
+    `SELECT * FROM oauth_states WHERE state = $1 AND expires_at > NOW()`,
+    [state],
+  );
 
 export function deleteOAuthState(state, executor = db) {
   return executor.none(`DELETE FROM oauth_states WHERE state = $1`, [state]);
+}
+
+/**
+ * Remove every oauth_states row whose 15-minute window has expired.
+ * Returns the number of rows deleted (useful for log lines). Run on a
+ * once-per-hour schedule in `src/index.js` so the table doesn't grow
+ * unboundedly under traffic.
+ */
+export async function deleteExpiredOAuthStates(executor = db) {
+  const result = await executor.query(
+    `DELETE FROM oauth_states WHERE expires_at < NOW()`,
+  );
+  return result.rowCount ?? 0;
 }

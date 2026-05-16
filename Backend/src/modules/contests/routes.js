@@ -20,7 +20,8 @@
  */
 import { Router } from 'express';
 
-import { asyncHandler, fromZod } from '../../shared/errors.js';
+import { asyncHandler, fromZod, HttpError } from '../../shared/errors.js';
+import { userRateLimit } from '../../shared/middleware/rate-limit.js';
 import { requireAuth, requireRole, ROLES } from '../auth/middleware.js';
 import {
   AttachProblemSchema,
@@ -36,6 +37,19 @@ const router = Router();
 
 const requireInstructor = requireRole(ROLES.INSTRUCTOR, ROLES.ADMIN);
 const requireAdmin = requireRole(ROLES.ADMIN);
+const contestSubmitLimiter = userRateLimit({ windowMs: 60_000, max: 60 });
+
+// Mirror of the Idempotency-Key handling in submissions/routes.js so
+// the contest submit endpoint can also collapse network retries.
+const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._~:-]{8,64}$/;
+function readIdempotencyKey(req) {
+  const raw = req.get('Idempotency-Key');
+  if (!raw) return null;
+  if (!IDEMPOTENCY_KEY_PATTERN.test(raw)) {
+    throw new HttpError(400, 'Invalid Idempotency-Key (must be URL-safe ASCII, 8–64 chars)');
+  }
+  return raw;
+}
 
 /* ─── list + detail ─────────────────────────────────────────────────────── */
 
@@ -105,12 +119,13 @@ router.post('/:slug/participate', requireAuth, asyncHandler(async (req, res) => 
 
 /* ─── contest submissions (async, 202 per ADR 0013) ─────────────────────── */
 
-router.post('/:slug/submissions/:letter', requireAuth, asyncHandler(async (req, res) => {
+router.post('/:slug/submissions/:letter', requireAuth, contestSubmitLimiter, asyncHandler(async (req, res) => {
   const parsed = ContestSubmissionSchema.safeParse(req.body);
   if (!parsed.success) throw fromZod(parsed.error);
   res.status(202).json(
     await service.submitInContest(
       req.user, req.params.slug, req.params.letter, parsed.data,
+      { idempotencyKey: readIdempotencyKey(req) },
     ),
   );
 }));

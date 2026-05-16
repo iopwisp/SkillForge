@@ -37,16 +37,39 @@ export async function listProblems({ search, difficulty, category, status, page,
     args.push(`%${tag}%`);
   }
 
+  // Push the status filter into SQL so pagination is computed against
+  // the filtered set. The previous in-Node filter caused page sizes
+  // to shrink unpredictably (page=1 of 50 could return 3 items if 47
+  // rows were filtered out post-query) and `total` to be wrong.
+  const u = userId || 0;
+  if (status === 'solved') {
+    where.push(`EXISTS (
+      SELECT 1 FROM submissions s
+      WHERE s.user_id = ? AND s.problem_id = p.id AND s.status = 'ACCEPTED'
+    )`);
+    args.push(u);
+  } else if (status === 'attempted') {
+    where.push(`EXISTS (
+      SELECT 1 FROM submissions s
+      WHERE s.user_id = ? AND s.problem_id = p.id
+    ) AND NOT EXISTS (
+      SELECT 1 FROM submissions s2
+      WHERE s2.user_id = ? AND s2.problem_id = p.id AND s2.status = 'ACCEPTED'
+    )`);
+    args.push(u, u);
+  } else if (status === 'todo') {
+    where.push(`NOT EXISTS (
+      SELECT 1 FROM submissions s
+      WHERE s.user_id = ? AND s.problem_id = p.id
+    )`);
+    args.push(u);
+  }
+
   const { rows, total } = await q.listProblems({
-    where, args, userId: userId || 0, limit, offset,
+    where, args, userId: u, limit, offset,
   });
 
-  const items = rows.map(toProblemSummary).filter((problem) => {
-    if (status === 'solved') return problem.status === 'solved';
-    if (status === 'attempted') return problem.status === 'attempted';
-    if (status === 'todo') return problem.status === null;
-    return true;
-  });
+  const items = rows.map(toProblemSummary);
 
   return { items, total, page: parseInt(page || '1', 10), pageSize: limit };
 }

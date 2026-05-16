@@ -51,6 +51,9 @@ function createExecutor(client) {
 
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL || DEFAULT_DATABASE_URL,
+  // 20 is the historical pg-pool default; bumping it up to a few
+  // hundred under load (or down to ~2 for tests) is a single env var.
+  max: parseInt(process.env.PG_POOL_SIZE || '20', 10),
 });
 
 export const db = {

@@ -159,6 +159,10 @@ export const getMySubmissionsForProblem = (userId, problemId, limit, executor = 
  * the same reason — a live or virtual contest attempt should not
  * appear in the global practice feed (per contest-mode R6.6).
  * Practice submissions pass through as before (both link columns NULL).
+ *
+ * PENDING / JUDGE_ERROR rows are also filtered out: the feed is
+ * supposed to advertise "what other students just solved", not what
+ * the worker is still processing or what crashed in the judge.
  */
 export const getRecentActivity = (limit, executor = db) =>
   executor.many(`
@@ -170,6 +174,7 @@ export const getRecentActivity = (limit, executor = db) =>
     JOIN problems p ON p.id = s.problem_id
     WHERE s.exam_attempt_id IS NULL
       AND s.contest_participation_id IS NULL
+      AND s.status NOT IN ('PENDING', 'JUDGE_ERROR')
     ORDER BY s.created_at DESC
     LIMIT $1
   `, [limit]);

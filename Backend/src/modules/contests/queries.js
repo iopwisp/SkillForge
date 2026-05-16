@@ -75,7 +75,7 @@ export async function updateContest(contestId, fields, executor = db) {
 export const deleteContest = (contestId, executor = db) =>
   executor.none(`DELETE FROM contests WHERE id = $1`, [contestId]);
 
-export async function listContests({ limit, offset, status, actorId }, executor = db) {
+export async function listContests({ limit, offset, status, actorId, actorRole }, executor = db) {
   const conditions = [];
   const args = [];
 
@@ -87,10 +87,23 @@ export async function listContests({ limit, offset, status, actorId }, executor 
     conditions.push(`NOW() >= ends_at`);
   }
 
+  // Privacy filter: students (and any non-staff actor) see public
+  // contests plus any private contest they're personally registered
+  // for. Instructors / admins see everything. Senior audit H-7.
+  const isStaff = actorRole === 'INSTRUCTOR' || actorRole === 'ADMIN';
+  if (!isStaff) {
+    args.push(actorId ?? null);
+    const slot = args.length;
+    conditions.push(`(c.is_public = true OR EXISTS (
+      SELECT 1 FROM contest_registrations cr2
+      WHERE cr2.contest_id = c.id AND cr2.user_id = $${slot}
+    ))`);
+  }
+
   const whereSql = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
   const totalRow = await executor.maybeOne(`
-    SELECT COUNT(*)::int AS total FROM contests ${whereSql}
+    SELECT COUNT(*)::int AS total FROM contests c ${whereSql}
   `, args);
 
   // The `actorId` parameter powers `isRegistered` per-row. We always

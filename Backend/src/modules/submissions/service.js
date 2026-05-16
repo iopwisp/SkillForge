@@ -253,7 +253,10 @@ export async function run({ slug, code, language, stdin }) {
   }
 
   // Non-STDIO: existing behavior
-  const result = runJudge(problem, code, language);
+  // Note: runJudge is async for Python/Java/Go (Docker mode); without
+  // await the response goes back as `{status: undefined, ...}` and the
+  // client thinks the run "succeeded" with empty output.
+  const result = await runJudge(problem, code, language);
   return {
     status: result.status,
     runtimeMs: result.runtimeMs,

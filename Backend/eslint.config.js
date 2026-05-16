@@ -27,7 +27,7 @@ export default [
 
   /* ── Source files: globals + lenient unused-vars ─────────────────────── */
   {
-    files: ['src/**/*.js', 'test/**/*.{js,mjs}', 'scripts/**/*.{js,mjs}'],
+    files: ['src/**/*.js', 'test/**/*.{js,mjs}', 'scripts/**/*.{js,mjs,cjs}'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',
@@ -47,6 +47,9 @@ export default [
         global: 'readonly',
         __dirname: 'readonly',
         __filename: 'readonly',
+        require: 'readonly',
+        module: 'readonly',
+        exports: 'readonly',
       },
     },
     rules: {
@@ -54,6 +57,14 @@ export default [
         argsIgnorePattern: '^_',
         varsIgnorePattern: '^_',
       }],
+    },
+  },
+
+  /* ── CommonJS scripts use sourceType: 'commonjs' ─────────────────────── */
+  {
+    files: ['scripts/**/*.cjs'],
+    languageOptions: {
+      sourceType: 'commonjs',
     },
   },
 

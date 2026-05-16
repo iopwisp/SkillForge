@@ -19,6 +19,13 @@ export async function runMigrations() {
       )
     `);
 
+    // Serialise concurrent boots (api + worker, two replicas of the
+    // same service, etc.) so two processes don't both see a missing
+    // version and both try to INSERT the same row. The session-scoped
+    // advisory lock auto-releases on disconnect; we also unlock
+    // explicitly in the finally block.
+    await client.query(`SELECT pg_advisory_lock(723318)`);
+
     const appliedRows = await client.query(`SELECT version FROM schema_migrations`);
     const applied = new Set(appliedRows.rows.map((row) => row.version));
 
@@ -56,6 +63,12 @@ export async function runMigrations() {
       }
     }
   } finally {
+    try {
+      await client.query(`SELECT pg_advisory_unlock(723318)`);
+    } catch {
+      // The session is being released anyway; the lock will drop on
+      // disconnect even if this call fails.
+    }
     client.release();
   }
 }

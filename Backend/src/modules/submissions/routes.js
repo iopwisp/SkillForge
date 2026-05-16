@@ -16,6 +16,7 @@
 import { Router } from 'express';
 
 import { asyncHandler, fromZod, HttpError } from '../../shared/errors.js';
+import { userRateLimit } from '../../shared/middleware/rate-limit.js';
 import { optionalAuth, requireAuth } from '../auth/middleware.js';
 import { RunSchema, SubmitSchema } from './schemas.js';
 import * as submissions from './service.js';
@@ -23,6 +24,12 @@ import * as submissions from './service.js';
 const router = Router();
 
 const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._~:-]{8,64}$/;
+
+// Per-user limits on the judge-bound endpoints. The limiter sits AFTER
+// `requireAuth` so it can key on `req.user.id` and so a 401 path doesn't
+// burn limiter quota.
+const submitLimiter = userRateLimit({ windowMs: 60_000, max: 60 });
+const runLimiter = userRateLimit({ windowMs: 60_000, max: 30 });
 
 function readIdempotencyKey(req) {
   const raw = req.get('Idempotency-Key');
@@ -34,7 +41,7 @@ function readIdempotencyKey(req) {
 }
 
 /** POST /api/submissions/:slug — submit code for a problem. */
-router.post('/:slug', requireAuth, asyncHandler(async (req, res) => {
+router.post('/:slug', requireAuth, submitLimiter, asyncHandler(async (req, res) => {
   const parsed = SubmitSchema.safeParse(req.body);
   if (!parsed.success) throw fromZod(parsed.error);
   const idempotencyKey = readIdempotencyKey(req);
@@ -49,7 +56,7 @@ router.post('/:slug', requireAuth, asyncHandler(async (req, res) => {
 }));
 
 /** POST /api/submissions/:slug/run — run sample only, do NOT persist. */
-router.post('/:slug/run', requireAuth, asyncHandler(async (req, res) => {
+router.post('/:slug/run', requireAuth, runLimiter, asyncHandler(async (req, res) => {
   const parsed = RunSchema.safeParse(req.body);
   if (!parsed.success) throw fromZod(parsed.error);
   res.json(await submissions.run({

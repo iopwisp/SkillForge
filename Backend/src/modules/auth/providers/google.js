@@ -28,6 +28,7 @@
  */
 import crypto from 'node:crypto';
 
+import { withTransaction } from '../../../shared/db.js';
 import { HttpError } from '../../../shared/errors.js';
 import { logger } from '../../../shared/logger.js';
 import * as q from '../queries.js';
@@ -43,9 +44,25 @@ export const googleProvider = {
    * Available iff the deployment configured both `GOOGLE_CLIENT_ID` and
    * `GOOGLE_CLIENT_SECRET`. We re-check on every call rather than caching,
    * so a deploy that adds the env vars + restarts picks them up.
+   *
+   * In production we additionally refuse to enable the provider if the
+   * configured `GOOGLE_REDIRECT_URI` is missing or points at localhost,
+   * which would otherwise turn an OAuth callback into a redirect to
+   * the operator's laptop.
    */
   enabled() {
-    return !!process.env.GOOGLE_CLIENT_ID && !!process.env.GOOGLE_CLIENT_SECRET;
+    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) return false;
+    if (process.env.NODE_ENV === 'production') {
+      const redirect = process.env.GOOGLE_REDIRECT_URI || '';
+      if (!redirect || /localhost|127\.0\.0\.1/i.test(redirect)) {
+        logger.error(
+          { redirect },
+          'Google OAuth disabled in production: GOOGLE_REDIRECT_URI must be set to a non-localhost URL',
+        );
+        return false;
+      }
+    }
+    return true;
   },
 
   async buildAuthUrl({ next } = {}) {
@@ -146,9 +163,15 @@ async function loginOrCreateWithGoogle(code) {
       username = `${baseUsername}${n}`;
     }
     // First user on a fresh install becomes ADMIN — see ADR 0006.
-    const role = (await q.isFirstUser()) ? 'ADMIN' : 'STUDENT';
-    user = await q.insertGoogleUser({
-      username, email, googleId: sub, avatarUrl: avatar, fullName: name, role,
+    // Wrap the bootstrap branch in a transaction with an advisory
+    // lock so two concurrent OAuth callbacks against an empty DB
+    // cannot both observe `isFirstUser() === true`.
+    user = await withTransaction(async (tx) => {
+      await q.acquireBootstrapLock(tx);
+      const role = (await q.isFirstUser(tx)) ? 'ADMIN' : 'STUDENT';
+      return q.insertGoogleUser({
+        username, email, googleId: sub, avatarUrl: avatar, fullName: name, role,
+      }, tx);
     });
   }
   return q.findUserById(user.id);

@@ -14,6 +14,7 @@ import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
 import pinoHttp from 'pino-http';
 
 import { asyncHandler } from './shared/errors.js';
@@ -37,8 +38,25 @@ import problemsRoutes from './modules/problems/routes.js';
 import submissionsRoutes from './modules/submissions/routes.js';
 import usersRoutes from './modules/users/routes.js';
 
+const isLocalhostOrigin = (origin) => /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin);
+
 export function createApp() {
   const app = express();
+
+  // Render / Heroku / load-balancer aware: trust the first hop so
+  // `express-rate-limit` sees the real client IP from `X-Forwarded-For`
+  // instead of the load-balancer's IP. With this off (the default),
+  // every request appears to come from the LB and the limiter rate-
+  // limits all users together.
+  app.set('trust proxy', 1);
+
+  // ─── Security headers ────────────────────────────────────────────────────
+  // Use helmet's defaults but disable contentSecurityPolicy because the
+  // SPA is served from a different origin and a misconfigured CSP can
+  // silently break the frontend. The other helmet defaults
+  // (X-Content-Type-Options, X-Frame-Options, Referrer-Policy,
+  // Strict-Transport-Security in prod, etc.) are safe.
+  app.use(helmet({ contentSecurityPolicy: false }));
 
   // ─── CORS ─────────────────────────────────────────────────────────────────
   const corsOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173')
@@ -51,10 +69,13 @@ export function createApp() {
       if (!origin) return cb(null, true);
       if (corsOrigins.includes('*')) return cb(null, true);
       if (corsOrigins.includes(origin)) return cb(null, true);
-      // In development, allow with a warning so a misconfigured frontend port
-      // doesn't block local debugging. In production, reject hard.
-      if (!isProd) {
-        logger.warn({ origin }, 'CORS dev-allow: origin not in CORS_ORIGIN allowlist');
+      // In development, allow localhost / 127.0.0.1 origins with a
+      // warning so a misconfigured frontend port doesn't block local
+      // debugging. Non-localhost origins are still rejected even in
+      // dev — the previous "warn and allow anything" policy could
+      // mask CSRF-like setups during testing. In production, reject hard.
+      if (!isProd && isLocalhostOrigin(origin)) {
+        logger.warn({ origin }, 'CORS dev-allow: localhost origin not in CORS_ORIGIN allowlist');
         return cb(null, true);
       }
       return cb(new Error(`CORS: origin "${origin}" not allowed`), false);
