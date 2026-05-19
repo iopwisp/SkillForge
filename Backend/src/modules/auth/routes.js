@@ -25,10 +25,11 @@ import { LoginSchema, RegisterSchema } from './schemas.js';
 import * as auth from './service.js';
 
 const isProd = process.env.NODE_ENV === 'production';
+const sameSiteOption = process.env.COOKIE_SAMESITE || 'lax';
 const cookieOptions = {
   httpOnly: true,
-  secure: isProd,
-  sameSite: 'lax',
+  secure: isProd || sameSiteOption === 'none',
+  sameSite: sameSiteOption,
   path: '/',
 };
 
