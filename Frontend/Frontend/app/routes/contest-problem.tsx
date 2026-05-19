@@ -433,8 +433,8 @@ function Workspace({
   return (
     <div className="h-[calc(100vh-3.5rem)] flex flex-col">
       {/* Top bar */}
-      <div className="border-b border-border bg-card/60 backdrop-blur px-4 h-12 flex items-center gap-3 shrink-0">
-        <Button variant="ghost" size="sm" asChild className="text-muted-foreground -ml-2">
+      <div className="border-b border-border/60 bg-background px-4 h-14 flex items-center gap-3 shrink-0">
+        <Button variant="ghost" size="sm" asChild className="text-muted-foreground -ml-2 h-8">
           <Link to={`/contests/${slug}`}>
             <ArrowLeft className="size-4 mr-1" /> Contest
           </Link>
@@ -457,6 +457,7 @@ function Workspace({
               size="sm"
               onClick={runCode}
               disabled={running || submitting || !problem}
+              className="h-8 border-border/60 shadow-sm"
             >
               <Play className="size-3.5 mr-1.5" />
               {running ? "Running…" : "Run"}
@@ -468,7 +469,7 @@ function Workspace({
             onClick={submit}
             disabled={!canSubmit || !problem}
             title={submitDisabledReason || undefined}
-            className="gradient-bg text-white border-0"
+            className="h-8 shadow-sm"
           >
             <Send className="size-3.5 mr-1.5" />
             {submitting ? "Judging…" : "Submit"}
@@ -611,18 +612,18 @@ function RegularBody({
 }) {
   return (
     <ResizablePanelGroup direction="horizontal" className="flex-1 min-h-0">
-      <ResizablePanel defaultSize={42} minSize={25} className="bg-card/40">
+      <ResizablePanel defaultSize={42} minSize={25} className="bg-background">
         <div className="h-full overflow-y-auto scrollbar-thin">
           <DescriptionPane problem={problem} current={current} letter={letter} />
         </div>
       </ResizablePanel>
 
-      <ResizableHandle withHandle className="bg-border" />
+      <ResizableHandle withHandle className="bg-border/60 w-px" />
 
       <ResizablePanel defaultSize={58} minSize={30}>
         <ResizablePanelGroup direction="vertical">
           <ResizablePanel defaultSize={62} minSize={20}>
-            <div className="h-full flex flex-col bg-card">
+            <div className="h-full flex flex-col bg-background">
               <EditorToolbar
                 problem={problem}
                 language={language}
@@ -634,9 +635,9 @@ function RegularBody({
             </div>
           </ResizablePanel>
 
-          <ResizableHandle withHandle className="bg-border" />
+          <ResizableHandle withHandle className="bg-border/60 h-px" />
 
-          <ResizablePanel defaultSize={38} minSize={15} className="bg-card/40">
+          <ResizablePanel defaultSize={38} minSize={15} className="bg-background">
             <div className="h-full overflow-y-auto scrollbar-thin p-4 space-y-4">
               <ResultView result={result} running={submitting} />
               <SubmissionHistory submissions={submissions} />
@@ -673,18 +674,18 @@ function StdioBody({
 }) {
   return (
     <ResizablePanelGroup direction="horizontal" className="flex-1 min-h-0">
-      <ResizablePanel defaultSize={40} minSize={25} className="bg-card/40">
+      <ResizablePanel defaultSize={40} minSize={25} className="bg-background">
         <div className="h-full overflow-y-auto scrollbar-thin">
           <DescriptionPane problem={problem} current={current} letter={letter} />
         </div>
       </ResizablePanel>
 
-      <ResizableHandle withHandle className="bg-border" />
+      <ResizableHandle withHandle className="bg-border/60 w-px" />
 
       <ResizablePanel defaultSize={60} minSize={30}>
         <ResizablePanelGroup direction="vertical">
           <ResizablePanel defaultSize={55} minSize={20}>
-            <div className="h-full flex flex-col bg-card">
+            <div className="h-full flex flex-col bg-background">
               <EditorToolbar
                 problem={problem}
                 language={language}
@@ -699,11 +700,11 @@ function StdioBody({
 
           <ResizableHandle withHandle className="bg-border" />
 
-          <ResizablePanel defaultSize={45} minSize={15} className="bg-card/40">
+          <ResizablePanel defaultSize={45} minSize={15} className="bg-background">
             <ResizablePanelGroup direction="horizontal">
               <ResizablePanel defaultSize={40} minSize={20}>
                 <div className="h-full flex flex-col">
-                  <div className="px-3 py-2 border-b border-border bg-muted/40 flex items-center gap-2">
+                  <div className="px-3 py-2 border-b border-border/60 bg-transparent flex items-center gap-2">
                     <Terminal className="size-3.5 text-muted-foreground" />
                     <span className="text-xs font-medium">stdin</span>
                   </div>
@@ -712,16 +713,16 @@ function StdioBody({
                     onChange={(e) => setStdin(e.target.value)}
                     placeholder="Enter input here..."
                     spellCheck={false}
-                    className="flex-1 w-full p-3 bg-card text-foreground font-mono text-[13px] leading-relaxed resize-none focus:outline-none scrollbar-thin"
+                    className="flex-1 w-full p-3 bg-transparent text-foreground font-mono text-[13px] leading-relaxed resize-none outline-none scrollbar-thin"
                   />
                 </div>
               </ResizablePanel>
 
-              <ResizableHandle withHandle className="bg-border" />
+              <ResizableHandle withHandle className="bg-border/60 w-px" />
 
               <ResizablePanel defaultSize={60} minSize={20}>
-                <div className="h-full flex flex-col">
-                  <div className="px-3 py-2 border-b border-border bg-muted/40 flex items-center gap-2">
+                <div className="h-full flex flex-col border-l border-border/60">
+                  <div className="px-3 py-2 border-b border-border/60 bg-transparent flex items-center gap-2">
                     <Terminal className="size-3.5 text-muted-foreground" />
                     <span className="text-xs font-medium">Output</span>
                     {stdioRunResult && (
@@ -803,9 +804,9 @@ function EditorToolbar({
   fullProgram?: boolean;
 }) {
   return (
-    <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-muted/40">
+    <div className="flex items-center gap-2 px-3 py-2 border-b border-border/60 bg-transparent">
       <Select value={language} onValueChange={onLanguageChange}>
-        <SelectTrigger className="w-[150px] h-8 border-border bg-background text-foreground text-xs">
+        <SelectTrigger className="w-[150px] h-8 border-border/60 bg-background text-foreground text-xs shadow-sm focus:ring-1 focus:ring-primary">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -1077,7 +1078,7 @@ function CodeMirrorLite({ value, onChange }: { value: string; onChange: (v: stri
       autoCorrect="off"
       autoCapitalize="off"
       autoComplete="off"
-      className="flex-1 w-full p-4 bg-card text-foreground font-mono text-[13px] leading-relaxed resize-none focus:outline-none scrollbar-thin"
+      className="flex-1 w-full p-4 bg-transparent text-foreground font-mono text-[13px] leading-relaxed resize-none outline-none scrollbar-thin"
       style={{ tabSize: 2 }}
     />
   );

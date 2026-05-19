@@ -145,7 +145,7 @@ function AttachProblemDialog({
   const [catalog, setCatalog] = useState<ProblemSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState<ProblemSummary | null>(null);
+  const [selected, setSelected] = useState<ProblemSummary[]>([]);
   const [position, setPosition] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -153,7 +153,7 @@ function AttachProblemDialog({
   useEffect(() => {
     if (!open) return;
     setQuery("");
-    setSelected(null);
+    setSelected([]);
     setPosition("");
     setLoading(true);
     api<{ items: ProblemSummary[]; total: number; page: number; pageSize: number }>(
@@ -179,17 +179,20 @@ function AttachProblemDialog({
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!selected) return;
+    if (selected.length === 0) return;
     setSubmitting(true);
     try {
-      const body: any = { problemSlug: selected.slug };
-      if (position.trim()) body.position = parseInt(position, 10);
-      await api(`/courses/${courseSlug}/problems`, { method: "POST", body });
-      toast.success(`Attached "${selected.title}"`);
+      let basePos = position.trim() ? parseInt(position, 10) : undefined;
+      for (let i = 0; i < selected.length; i++) {
+        const body: any = { problemSlug: selected[i].slug };
+        if (basePos !== undefined) body.position = basePos + i;
+        await api(`/courses/${courseSlug}/problems`, { method: "POST", body });
+      }
+      toast.success(`Attached ${selected.length} problem${selected.length === 1 ? "" : "s"}`);
       onOpenChange(false);
       onAttached();
     } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "Could not attach problem");
+      toast.error(e instanceof ApiError ? e.message : "Could not attach problems");
     } finally {
       setSubmitting(false);
     }
@@ -198,7 +201,7 @@ function AttachProblemDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
-        <form onSubmit={submit}>
+        <form onSubmit={submit} className="flex flex-col min-w-0 w-full">
           <DialogHeader>
             <DialogTitle>Attach problem to course</DialogTitle>
           </DialogHeader>
@@ -209,62 +212,73 @@ function AttachProblemDialog({
             </Link>
           </p>
 
-          <div className="space-y-3 my-3">
+          <div className="space-y-4 my-4">
             <div>
-              <Label htmlFor="problem-search">Problem</Label>
-              <div className="relative mt-1.5">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-                <Input
-                  id="problem-search"
-                  value={query}
-                  onChange={(e) => { setQuery(e.target.value); setSelected(null); }}
-                  placeholder="Search by title, slug, or tag…"
-                  className="pl-9"
-                  autoComplete="off"
-                />
-              </div>
+              <Label htmlFor="problem-search" className="sr-only">Problem Search</Label>
+              <div className="mt-1.5 rounded-xl border border-border/60 bg-card overflow-hidden shadow-sm focus-within:border-primary focus-within:ring-1 focus-within:ring-primary transition-all">
+                <div className="relative border-b border-border/60">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+                  <input
+                    id="problem-search"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Search by title, slug, or tag…"
+                    className="w-full min-w-0 bg-transparent pl-10 pr-4 py-3 text-sm outline-none placeholder:text-muted-foreground"
+                    autoComplete="off"
+                  />
+                </div>
 
-              <div className="mt-2 max-h-64 overflow-y-auto rounded-md border border-border bg-card">
-                {loading ? (
-                  <div className="p-4 text-sm text-muted-foreground">Loading catalog…</div>
-                ) : filtered.length === 0 ? (
-                  <div className="p-4 text-sm text-muted-foreground">
-                    {catalog.length === 0
-                      ? "No problems in the catalog. Create one in the problems catalog first."
-                      : attachedSet.size > 0 && catalog.every(p => attachedSet.has(p.slug))
-                        ? "Every problem in the catalog is already attached."
-                        : "No problems match this search."}
-                  </div>
-                ) : (
-                  <ul className="divide-y divide-border">
-                    {filtered.map(p => {
-                      const isSelected = selected?.slug === p.slug;
-                      return (
-                        <li key={p.slug}>
-                          <button
-                            type="button"
-                            onClick={() => setSelected(p)}
-                            className={`w-full text-left px-3 py-2 flex items-center gap-3 hover:bg-accent/50 transition-colors ${
-                              isSelected ? "bg-primary/10" : ""
-                            }`}
-                          >
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium truncate text-sm">{p.title}</div>
-                              <code className="text-xs text-muted-foreground">{p.slug}</code>
-                            </div>
-                            <DifficultyBadge difficulty={p.difficulty} />
-                            {p.problemType && (
-                              <span className="text-[10px] text-muted-foreground shrink-0">
-                                {p.problemType}
-                              </span>
-                            )}
-                            {isSelected && <Check className="size-4 text-primary shrink-0" />}
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
+                <div className="max-h-64 overflow-y-auto p-1.5">
+                  {loading ? (
+                    <div className="p-4 text-sm text-center text-muted-foreground">Loading catalog…</div>
+                  ) : filtered.length === 0 ? (
+                    <div className="p-4 text-sm text-center text-muted-foreground">
+                      {catalog.length === 0
+                        ? "No problems in the catalog. Create one in the problems catalog first."
+                        : attachedSet.size > 0 && catalog.every(p => attachedSet.has(p.slug))
+                          ? "Every problem in the catalog is already attached."
+                          : "No problems match this search."}
+                    </div>
+                  ) : (
+                    <ul className="space-y-0.5">
+                      {filtered.map(p => {
+                        const isSelected = selected.some(x => x.slug === p.slug);
+                        return (
+                          <li key={p.slug}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelected(current => {
+                                  if (current.some(x => x.slug === p.slug)) {
+                                    return current.filter(x => x.slug !== p.slug);
+                                  }
+                                  return [...current, p];
+                                });
+                              }}
+                              className={`w-full text-left px-3 py-2.5 rounded-md flex items-center gap-3 transition-colors ${
+                                isSelected ? "bg-primary/10 text-primary" : "hover:bg-accent/50 text-foreground"
+                              }`}
+                            >
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium truncate text-sm">{p.title}</div>
+                                <code className="text-xs opacity-70 block truncate mt-0.5">{p.slug}</code>
+                              </div>
+                              <DifficultyBadge difficulty={p.difficulty} className={isSelected ? "bg-background" : ""} />
+                              {p.problemType && (
+                                <span className={`text-[10px] uppercase tracking-wider shrink-0 ${isSelected ? "text-primary/70" : "text-muted-foreground"}`}>
+                                  {p.problemType}
+                                </span>
+                              )}
+                              <div className="w-5 flex justify-end shrink-0">
+                                {isSelected && <Check className="size-4" />}
+                              </div>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -283,8 +297,8 @@ function AttachProblemDialog({
           </div>
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button type="submit" disabled={submitting || !selected}>
-              {submitting ? "Attaching…" : selected ? `Attach "${selected.title}"` : "Attach"}
+            <Button type="submit" disabled={submitting || selected.length === 0}>
+              {submitting ? "Attaching…" : selected.length > 0 ? `Attach ${selected.length} problem${selected.length === 1 ? "" : "s"}` : "Attach"}
             </Button>
           </DialogFooter>
         </form>

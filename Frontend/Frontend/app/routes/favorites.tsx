@@ -36,7 +36,7 @@ function Inner() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {items.map(p => (
             <Link key={p.id} to={`/problems/${p.slug}`}
-              className="group rounded-xl border border-border bg-card hover:border-primary/40 transition-colors p-5 flex flex-col"
+              className="group flex flex-col card-interactive p-5"
             >
               <div className="flex items-center justify-between">
                 <DifficultyBadge difficulty={p.difficulty} />

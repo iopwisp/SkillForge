@@ -2,10 +2,10 @@
 
 :root {
   --font-size: 14px;
-  --radius: 0.75rem;
+  --radius: 0.625rem;
 
-  /* SkillForge Light Theme — indigo + amber accent on warm-neutral surfaces */
-  --background: oklch(0.99 0.005 256);
+  /* SkillForge Light Theme — neutral slate with indigo accent, SaaS-clean */
+  --background: oklch(0.99 0.003 264);
   --foreground: oklch(0.18 0.02 264);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.18 0.02 264);
@@ -15,12 +15,12 @@
   --primary: oklch(0.49 0.21 274);          /* indigo-600 */
   --primary-foreground: oklch(0.99 0 0);
 
-  --secondary: oklch(0.96 0.01 262);
-  --secondary-foreground: oklch(0.18 0.02 264);
-  --muted: oklch(0.96 0.005 262);
-  --muted-foreground: oklch(0.50 0.02 262);
-  --accent: oklch(0.95 0.02 90);            /* warm amber tint */
-  --accent-foreground: oklch(0.30 0.10 60);
+  --secondary: oklch(0.965 0.005 264);
+  --secondary-foreground: oklch(0.20 0.02 264);
+  --muted: oklch(0.965 0.005 264);
+  --muted-foreground: oklch(0.50 0.015 264);
+  --accent: oklch(0.95 0.01 264);           /* neutral hover */
+  --accent-foreground: oklch(0.20 0.02 264);
 
   --destructive: oklch(0.55 0.21 25);
   --destructive-foreground: oklch(1 0 0);
@@ -29,10 +29,16 @@
   --warning: oklch(0.78 0.16 80);
   --warning-foreground: oklch(0.25 0.05 60);
 
-  --border: oklch(0.92 0.005 262);
-  --input: oklch(0.97 0.005 262);
-  --input-background: oklch(0.97 0.005 262);
+  --border: oklch(0.93 0.005 264);
+  --border-subtle: oklch(0.95 0.005 264);
+  --input: oklch(0.97 0.005 264);
+  --input-background: oklch(0.99 0.003 264);
   --ring: oklch(0.49 0.21 274);
+
+  --surface-1: oklch(1 0 0);                /* base card */
+  --surface-2: oklch(0.975 0.005 264);      /* nested card / hover */
+  --shadow-sm: 0 1px 2px 0 rgb(15 23 42 / 0.04);
+  --shadow-md: 0 4px 12px -2px rgb(15 23 42 / 0.06), 0 2px 4px -2px rgb(15 23 42 / 0.04);
 
   --switch-background: oklch(0.85 0.01 262);
 
@@ -47,13 +53,13 @@
   --chart-4: oklch(0.62 0.22 30);
   --chart-5: oklch(0.55 0.22 304);
 
-  --sidebar: oklch(0.985 0.005 262);
-  --sidebar-foreground: oklch(0.30 0.02 262);
+  --sidebar: oklch(0.985 0.003 264);
+  --sidebar-foreground: oklch(0.30 0.015 264);
   --sidebar-primary: oklch(0.49 0.21 274);
   --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.96 0.01 262);
-  --sidebar-accent-foreground: oklch(0.18 0.02 264);
-  --sidebar-border: oklch(0.92 0.005 262);
+  --sidebar-accent: oklch(0.95 0.01 264);
+  --sidebar-accent-foreground: oklch(0.20 0.02 264);
+  --sidebar-border: oklch(0.93 0.005 264);
   --sidebar-ring: oklch(0.49 0.21 274);
 
   /* Brand-specific tokens */
@@ -65,22 +71,22 @@
 }
 
 .dark {
-  /* SkillForge Dark Theme — true dark grey, indigo-violet accents */
-  --background: oklch(0.16 0.01 264);
+  /* SkillForge Dark Theme — Linear-style near-black with restrained indigo */
+  --background: oklch(0.155 0.008 264);
   --foreground: oklch(0.97 0.005 264);
-  --card: oklch(0.20 0.01 264);
+  --card: oklch(0.19 0.008 264);
   --card-foreground: oklch(0.97 0.005 264);
-  --popover: oklch(0.20 0.01 264);
+  --popover: oklch(0.21 0.01 264);
   --popover-foreground: oklch(0.97 0.005 264);
 
-  --primary: oklch(0.72 0.16 280);          /* indigo-400 — vibrant on dark */
+  --primary: oklch(0.72 0.16 280);          /* indigo-400 */
   --primary-foreground: oklch(0.16 0.01 264);
 
-  --secondary: oklch(0.24 0.015 264);
+  --secondary: oklch(0.23 0.01 264);
   --secondary-foreground: oklch(0.97 0.005 264);
-  --muted: oklch(0.24 0.015 264);
-  --muted-foreground: oklch(0.68 0.02 264);
-  --accent: oklch(0.27 0.04 274);
+  --muted: oklch(0.23 0.01 264);
+  --muted-foreground: oklch(0.66 0.015 264);
+  --accent: oklch(0.24 0.012 264);
   --accent-foreground: oklch(0.97 0.005 264);
 
   --destructive: oklch(0.62 0.20 22);
@@ -90,10 +96,16 @@
   --warning: oklch(0.82 0.16 80);
   --warning-foreground: oklch(0.16 0.01 264);
 
-  --border: oklch(0.26 0.015 264);
-  --input: oklch(0.24 0.015 264);
-  --input-background: oklch(0.22 0.015 264);
+  --border: oklch(0.255 0.01 264);
+  --border-subtle: oklch(0.22 0.01 264);
+  --input: oklch(0.23 0.01 264);
+  --input-background: oklch(0.21 0.01 264);
   --ring: oklch(0.72 0.16 280);
+
+  --surface-1: oklch(0.19 0.008 264);
+  --surface-2: oklch(0.225 0.01 264);
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.4);
 
   --switch-background: oklch(0.32 0.02 264);
 
@@ -103,13 +115,13 @@
   --chart-4: oklch(0.68 0.22 30);
   --chart-5: oklch(0.65 0.22 304);
 
-  --sidebar: oklch(0.18 0.01 264);
-  --sidebar-foreground: oklch(0.92 0.01 264);
+  --sidebar: oklch(0.175 0.008 264);
+  --sidebar-foreground: oklch(0.90 0.01 264);
   --sidebar-primary: oklch(0.72 0.16 280);
   --sidebar-primary-foreground: oklch(0.16 0.01 264);
-  --sidebar-accent: oklch(0.24 0.015 264);
+  --sidebar-accent: oklch(0.23 0.01 264);
   --sidebar-accent-foreground: oklch(0.97 0.005 264);
-  --sidebar-border: oklch(0.24 0.015 264);
+  --sidebar-border: oklch(0.23 0.01 264);
   --sidebar-ring: oklch(0.72 0.16 280);
 
   --brand-indigo: oklch(0.72 0.16 280);
@@ -141,6 +153,9 @@
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
   --color-border: var(--border);
+  --color-border-subtle: var(--border-subtle);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
   --color-input: var(--input);
   --color-input-background: var(--input-background);
   --color-switch-background: var(--switch-background);
@@ -184,10 +199,22 @@
   }
 
   body {
+    /* Subtle dot-grid background (Linear-style). Lives on the body so all
+       in-app surfaces inherit the same calm base; full-bleed marketing
+       pages override locally with their own gradient. */
     background-image:
-      radial-gradient(ellipse 80% 60% at 50% -10%, color-mix(in oklab, var(--brand-indigo) 18%, transparent), transparent 70%),
-      radial-gradient(ellipse 60% 50% at 100% 100%, color-mix(in oklab, var(--brand-violet) 12%, transparent), transparent 70%);
+      radial-gradient(circle at 1px 1px,
+        color-mix(in oklab, var(--foreground) 6%, transparent) 1px,
+        transparent 0);
+    background-size: 24px 24px;
     background-attachment: fixed;
+  }
+
+  .dark body {
+    background-image:
+      radial-gradient(circle at 1px 1px,
+        color-mix(in oklab, var(--foreground) 4%, transparent) 1px,
+        transparent 0);
   }
 
   code, kbd, pre, samp, .font-mono {
@@ -202,10 +229,75 @@
 
 @layer components {
   .glass-panel {
-    background: color-mix(in oklab, var(--card) 80%, transparent);
+    background: color-mix(in oklab, var(--card) 92%, transparent);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+    border: 1px solid var(--border-subtle);
+  }
+
+  /* Solid topbar surface for in-app chrome (no blur, sharper edges). */
+  .topbar-surface {
+    background: var(--surface-1);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  /* Compact monospace key cap, used in topbar search hint. */
+  .kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 1.25rem;
+    min-width: 1.25rem;
+    padding: 0 0.35rem;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 10.5px;
+    font-weight: 500;
+    color: var(--muted-foreground);
+    background: var(--muted);
+    border: 1px solid var(--border-subtle);
+    border-radius: 0.3rem;
+  }
+
+  /* Filter / status chip (toggleable). */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    height: 1.75rem;
+    padding: 0 0.75rem;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: var(--muted-foreground);
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    transition: background-color .15s, color .15s, border-color .15s;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .chip:hover {
+    background: var(--surface-2);
+    color: var(--foreground);
+  }
+  .chip[data-state="active"] {
+    background: color-mix(in oklab, var(--primary) 12%, var(--surface-1));
+    color: var(--primary);
+    border-color: color-mix(in oklab, var(--primary) 35%, var(--border));
+  }
+  .dark .chip[data-state="active"] {
+    background: color-mix(in oklab, var(--primary) 18%, var(--surface-1));
+    color: var(--foreground);
+  }
+
+  /* Soft divider between dense sections. */
+  .divider-soft { border-color: var(--border-subtle); }
+
+  /* Standardised section-title used by Section component. */
+  .section-title {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    color: var(--foreground);
   }
 
   .gradient-text {
@@ -234,5 +326,94 @@
   }
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
     background: var(--muted-foreground);
+  }
+
+  /* ─── Overhaul v1: interactive card ───────────────────────────────── */
+  /* Reusable card with hover lift + shadow transition. Replaces
+     duplicated 5-line Tailwind strings on every clickable card. */
+  .card-interactive {
+    border-radius: var(--radius);
+    border: 1px solid var(--border-subtle);
+    background: var(--card);
+    box-shadow: var(--shadow-sm);
+    transition:
+      box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1),
+      border-color 200ms cubic-bezier(0.4, 0, 0.2, 1),
+      transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .card-interactive:hover {
+    box-shadow: var(--shadow-md);
+    border-color: var(--border);
+    transform: translateY(-1px);
+  }
+
+  /* ─── Overhaul v1: page content entrance ─────────────────────────── */
+  @keyframes page-enter {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .page-enter {
+    animation: page-enter 250ms cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+
+  /* ─── Overhaul v1: accent bar for cards ──────────────────────────── */
+  /* 2px decorative top-bar for course / recommended cards. Colour set
+     via `--accent-hue` (inline style), defaults to primary. */
+  .accent-bar::before {
+    content: '';
+    display: block;
+    height: 2px;
+    border-radius: var(--radius) var(--radius) 0 0;
+    background: oklch(0.65 0.18 var(--accent-hue, 274));
+  }
+  .dark .accent-bar::before {
+    background: oklch(0.72 0.14 var(--accent-hue, 274));
+  }
+
+  /* ─── Overhaul v1: progress bar fill ─────────────────────────────── */
+  .progress-fill {
+    transition: width 600ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* ─── Overhaul v1: row with status accent ────────────────────────── */
+  .row-accent-left {
+    border-left: 2px solid transparent;
+    transition: background-color 150ms, border-color 150ms;
+  }
+  .row-accent-left:hover {
+    background: color-mix(in oklab, var(--accent) 50%, transparent);
+  }
+  .row-accent-left[data-status="solved"] {
+    border-left-color: var(--success);
+  }
+  .row-accent-left[data-status="attempted"] {
+    border-left-color: var(--warning);
+  }
+
+  /* ─── Overhaul v1: acceptance mini-bar ───────────────────────────── */
+  .acceptance-bar {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-width: 5rem;
+  }
+  .acceptance-bar-track {
+    flex: 1;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--muted);
+    overflow: hidden;
+  }
+  .acceptance-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    background: var(--primary);
+    transition: width 400ms cubic-bezier(0.4, 0, 0.2, 1);
   }
 }

@@ -26,6 +26,13 @@ export function formatNumber(n: number): string {
   return (n / 1_000_000).toFixed(1).replace(/\.0$/, "") + "M";
 }
 
+/** Render a 0..1 ratio as an integer percentage, clamping out-of-range values. */
+export function formatPercent(ratio: number, digits = 0): string {
+  if (!Number.isFinite(ratio)) return "0%";
+  const clamped = Math.max(0, Math.min(1, ratio));
+  return `${(clamped * 100).toFixed(digits).replace(/\.0+$/, "")}%`;
+}
+
 export function difficultyColor(d: string) {
   switch (d) {
     case "EASY":   return "text-emerald-500";

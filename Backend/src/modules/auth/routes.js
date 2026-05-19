@@ -24,6 +24,24 @@ import { requireAuth } from './middleware.js';
 import { LoginSchema, RegisterSchema } from './schemas.js';
 import * as auth from './service.js';
 
+const isProd = process.env.NODE_ENV === 'production';
+const cookieOptions = {
+  httpOnly: true,
+  secure: isProd,
+  sameSite: 'lax',
+  path: '/',
+};
+
+function setAuthCookies(res, authData) {
+  res.cookie('accessToken', authData.accessToken, { ...cookieOptions, maxAge: 15 * 60 * 1000 }); // 15 min
+  res.cookie('refreshToken', authData.refreshToken, { ...cookieOptions, maxAge: 7 * 24 * 60 * 60 * 1000 }); // 7 days
+}
+
+function clearAuthCookies(res) {
+  res.clearCookie('accessToken', cookieOptions);
+  res.clearCookie('refreshToken', cookieOptions);
+}
+
 const router = Router();
 
 /* ── local (password) routes ────────────────────────────────────────────── */
@@ -31,21 +49,30 @@ const router = Router();
 router.post('/register', asyncHandler(async (req, res) => {
   const parsed = RegisterSchema.safeParse(req.body);
   if (!parsed.success) throw fromZod(parsed.error);
-  res.status(201).json(await auth.register(parsed.data));
+  const result = await auth.register(parsed.data);
+  setAuthCookies(res, result);
+  res.status(201).json(result);
 }));
 
 router.post('/login', asyncHandler(async (req, res) => {
   const parsed = LoginSchema.safeParse(req.body);
   if (!parsed.success) throw fromZod(parsed.error);
-  res.json(await auth.login(parsed.data));
+  const result = await auth.login(parsed.data);
+  setAuthCookies(res, result);
+  res.json(result);
 }));
 
 router.post('/refresh', asyncHandler(async (req, res) => {
-  res.json(await auth.refresh(req.body?.refreshToken));
+  const token = req.body?.refreshToken || req.cookies?.refreshToken;
+  const result = await auth.refresh(token);
+  setAuthCookies(res, result);
+  res.json(result);
 }));
 
 router.post('/logout', asyncHandler(async (req, res) => {
-  await auth.logout(req.body?.refreshToken);
+  const token = req.body?.refreshToken || req.cookies?.refreshToken;
+  await auth.logout(token);
+  clearAuthCookies(res);
   res.json({ ok: true });
 }));
 
@@ -103,7 +130,9 @@ async function handleOAuthCallback(providerName, req, res) {
     state: req.query.state,
   });
   if (result.error) return redirectWithError(res, result.frontend, result.error);
+  setAuthCookies(res, result.auth);
   const url = new URL(result.frontend);
+  // Still appending to URL for backward compatibility if the SPA reads them
   url.searchParams.set('accessToken', result.auth.accessToken);
   url.searchParams.set('refreshToken', result.auth.refreshToken);
   res.redirect(url.toString());

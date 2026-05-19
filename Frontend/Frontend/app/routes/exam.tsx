@@ -526,8 +526,8 @@ function ExamWorkspace({
   return (
     <div className="h-[calc(100vh-3.5rem)] flex flex-col">
       {/* Exam top bar */}
-      <div className="border-b border-border bg-card/60 backdrop-blur px-4 h-12 flex items-center gap-3 shrink-0">
-        <Button variant="ghost" size="sm" asChild className="text-muted-foreground -ml-2">
+      <div className="border-b border-border/60 bg-background px-4 h-14 flex items-center gap-3 shrink-0">
+        <Button variant="ghost" size="sm" asChild className="text-muted-foreground -ml-2 h-8">
           <Link to={`/courses/${courseSlug}`}><ArrowLeft className="size-4 mr-1" /> Course</Link>
         </Button>
         <span className="text-muted-foreground">|</span>
@@ -595,7 +595,7 @@ function ExamWorkspace({
       ) : (
         <ResizablePanelGroup direction="horizontal" className="flex-1 min-h-0">
           {/* Left: problem description */}
-          <ResizablePanel defaultSize={40} minSize={25} className="bg-card/40">
+          <ResizablePanel defaultSize={40} minSize={25} className="bg-background">
             <div className="h-full overflow-y-auto p-6 space-y-4">
               <div className="flex items-center gap-3">
                 <h2 className="text-lg font-bold">{current.title}</h2>
@@ -639,7 +639,7 @@ function ExamWorkspace({
             </div>
           </ResizablePanel>
 
-          <ResizableHandle withHandle className="bg-border" />
+          <ResizableHandle withHandle className="bg-border/60 w-px" />
 
           {/* Right: editor + result — branched for STDIO */}
           <ResizablePanel defaultSize={60} minSize={30}>
@@ -671,15 +671,15 @@ function ExamWorkspace({
             <ResizablePanelGroup direction="vertical">
               {/* Editor */}
               <ResizablePanel defaultSize={65} minSize={20}>
-                <div className="h-full flex flex-col bg-card">
-                  <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-muted/40">
+                <div className="h-full flex flex-col bg-background">
+                  <div className="flex items-center gap-2 px-3 py-2 border-b border-border/60 bg-transparent">
                     <Select value={language} onValueChange={(v) => {
                       setLanguage(v);
                       const key = `skillforge.exam.${exam.slug}.${current.slug}.${v}`;
                       const saved = localStorage.getItem(key);
                       setCode(saved || problemDetail.starterCode?.[v] || defaultTemplate(v, problemDetail));
                     }}>
-                      <SelectTrigger className="w-[140px] h-8 border-border bg-background text-foreground text-xs">
+                      <SelectTrigger className="w-[140px] h-8 border-border/60 bg-background text-foreground text-xs shadow-sm focus:ring-1 focus:ring-primary">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -688,7 +688,7 @@ function ExamWorkspace({
                         ))}
                       </SelectContent>
                     </Select>
-                    <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground" onClick={resetCode}>
+                    <Button variant="ghost" size="sm" className="h-8 text-muted-foreground hover:text-foreground" onClick={resetCode}>
                       <RotateCcw className="size-3.5 mr-1.5" /> Reset
                     </Button>
                     <div className="ml-auto flex items-center gap-2">
@@ -696,7 +696,7 @@ function ExamWorkspace({
                         size="sm"
                         onClick={handleSubmit}
                         disabled={submitting}
-                        className="gradient-bg text-white border-0"
+                        className="h-8 shadow-sm"
                       >
                         <Send className="size-3.5 mr-1.5" />
                         {submitting ? "Judging..." : "Submit"}
@@ -710,16 +710,16 @@ function ExamWorkspace({
                     autoCorrect="off"
                     autoCapitalize="off"
                     autoComplete="off"
-                    className="flex-1 w-full p-4 bg-card text-foreground font-mono text-[13px] leading-relaxed resize-none focus:outline-none scrollbar-thin"
+                    className="flex-1 w-full p-4 bg-transparent text-foreground font-mono text-[13px] leading-relaxed resize-none outline-none scrollbar-thin"
                     style={{ tabSize: 2 }}
                   />
                 </div>
               </ResizablePanel>
 
-              <ResizableHandle withHandle className="bg-border" />
+              <ResizableHandle withHandle className="bg-border/60 h-px" />
 
               {/* Result */}
-              <ResizablePanel defaultSize={35} minSize={15} className="bg-card/40">
+              <ResizablePanel defaultSize={35} minSize={15} className="bg-background">
                 <div className="h-full overflow-y-auto p-4">
                   <ExamResultView result={result} submitting={submitting} />
                 </div>
@@ -799,10 +799,10 @@ function ExamStdioPanel({
     <ResizablePanelGroup direction="vertical">
       {/* Editor */}
       <ResizablePanel defaultSize={50} minSize={20}>
-        <div className="h-full flex flex-col bg-card">
-          <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-muted/40">
+        <div className="h-full flex flex-col bg-background">
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-border/60 bg-transparent">
             <Select value={language} onValueChange={setLanguage}>
-              <SelectTrigger className="w-[140px] h-8 border-border bg-background text-foreground text-xs">
+              <SelectTrigger className="w-[140px] h-8 border-border/60 bg-background text-foreground text-xs shadow-sm focus:ring-1 focus:ring-primary">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -814,11 +814,11 @@ function ExamStdioPanel({
             <span className="text-[11px] uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
               Full Program
             </span>
-            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground" onClick={resetCode}>
+            <Button variant="ghost" size="sm" className="h-8 text-muted-foreground hover:text-foreground" onClick={resetCode}>
               <RotateCcw className="size-3.5 mr-1.5" /> Reset
             </Button>
             <div className="ml-auto flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={onRun} disabled={running || submitting}>
+              <Button variant="outline" size="sm" onClick={onRun} disabled={running || submitting} className="h-8 border-border/60 shadow-sm">
                 <Play className="size-3.5 mr-1.5" />
                 {running ? "Running..." : "Run"}
               </Button>
@@ -826,7 +826,7 @@ function ExamStdioPanel({
                 size="sm"
                 onClick={onSubmit}
                 disabled={running || submitting}
-                className="gradient-bg text-white border-0"
+                className="h-8 shadow-sm"
               >
                 <Send className="size-3.5 mr-1.5" />
                 {submitting ? "Judging..." : "Submit"}
@@ -840,21 +840,21 @@ function ExamStdioPanel({
             autoCorrect="off"
             autoCapitalize="off"
             autoComplete="off"
-            className="flex-1 w-full p-4 bg-card text-foreground font-mono text-[13px] leading-relaxed resize-none focus:outline-none scrollbar-thin"
+            className="flex-1 w-full p-4 bg-transparent text-foreground font-mono text-[13px] leading-relaxed resize-none outline-none scrollbar-thin"
             style={{ tabSize: 2 }}
           />
         </div>
       </ResizablePanel>
 
-      <ResizableHandle withHandle className="bg-border" />
+      <ResizableHandle withHandle className="bg-border/60 h-px" />
 
       {/* Stdin / Stdout + Results */}
-      <ResizablePanel defaultSize={50} minSize={15} className="bg-card/40">
+      <ResizablePanel defaultSize={50} minSize={15} className="bg-background">
         <ResizablePanelGroup direction="horizontal">
           {/* Stdin */}
           <ResizablePanel defaultSize={40} minSize={20}>
             <div className="h-full flex flex-col">
-              <div className="px-3 py-2 border-b border-border bg-muted/40 flex items-center gap-2">
+              <div className="px-3 py-2 border-b border-border/60 bg-transparent flex items-center gap-2">
                 <Terminal className="size-3.5 text-muted-foreground" />
                 <span className="text-xs font-medium">stdin</span>
               </div>
@@ -863,17 +863,17 @@ function ExamStdioPanel({
                 onChange={(e) => setStdin(e.target.value)}
                 placeholder="Enter input here..."
                 spellCheck={false}
-                className="flex-1 w-full p-3 bg-card text-foreground font-mono text-[13px] leading-relaxed resize-none focus:outline-none scrollbar-thin"
+                className="flex-1 w-full p-3 bg-transparent text-foreground font-mono text-[13px] leading-relaxed resize-none outline-none scrollbar-thin"
               />
             </div>
           </ResizablePanel>
 
-          <ResizableHandle withHandle className="bg-border" />
+          <ResizableHandle withHandle className="bg-border/60 w-px" />
 
           {/* Stdout / Result */}
           <ResizablePanel defaultSize={60} minSize={20}>
-            <div className="h-full flex flex-col">
-              <div className="px-3 py-2 border-b border-border bg-muted/40 flex items-center gap-2">
+            <div className="h-full flex flex-col border-l border-border/60">
+              <div className="px-3 py-2 border-b border-border/60 bg-transparent flex items-center gap-2">
                 <Terminal className="size-3.5 text-muted-foreground" />
                 <span className="text-xs font-medium">Output</span>
                 {stdioRunResult && (

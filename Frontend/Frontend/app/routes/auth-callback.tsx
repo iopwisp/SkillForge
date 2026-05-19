@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
-import { tokens, api } from "~/lib/api";
+import { api } from "~/lib/api";
 import { useAuth } from "~/lib/auth";
 import { Logo } from "~/components/brand/Logo";
 import type { User } from "~/lib/types";
@@ -26,14 +26,8 @@ export default function AuthCallback() {
         setErrorMessage(messageForError(error));
         return;
       }
-      const access = params.get("accessToken");
-      const refresh = params.get("refreshToken");
-      if (!access || !refresh) {
-        setStatus("error");
-        setErrorMessage("Missing tokens from OAuth response.");
-        return;
-      }
-      tokens.set(access, refresh);
+      // The backend sets HttpOnly cookies on OAuth redirect.
+      // We don't need to read tokens from the URL anymore.
       try {
         const me = await api<User>("/auth/me");
         await refreshMe();

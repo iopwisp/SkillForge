@@ -293,8 +293,8 @@ export default function ProblemDetailPage() {
   return (
     <div className="h-[calc(100vh-3.5rem)] flex flex-col">
       {/* Subtle top bar */}
-      <div className="border-b border-border bg-card/60 backdrop-blur px-4 h-12 flex items-center gap-3 shrink-0">
-        <Button variant="ghost" size="sm" asChild className="text-muted-foreground -ml-2">
+      <div className="border-b border-border/60 bg-background px-4 h-14 flex items-center gap-3 shrink-0">
+        <Button variant="ghost" size="sm" asChild className="text-muted-foreground -ml-2 h-8">
           <Link to="/problems"><ArrowLeft className="size-4 mr-1" /> Problems</Link>
         </Button>
         <span className="text-muted-foreground">·</span>
@@ -309,11 +309,11 @@ export default function ProblemDetailPage() {
           <Star className={`size-4 ${problem.favorited ? "fill-current" : ""}`} />
         </button>
         <div className="ml-auto flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={runCode} disabled={running || submitting}>
+          <Button variant="outline" size="sm" onClick={runCode} disabled={running || submitting} className="h-8 border-border/60 shadow-sm">
             <Play className="size-3.5 mr-1.5" />
             {running ? "Running…" : "Run"}
           </Button>
-          <Button size="sm" onClick={submit} disabled={running || submitting} className="gradient-bg text-white border-0">
+          <Button size="sm" onClick={submit} disabled={running || submitting} className="h-8 shadow-sm">
             <Send className="size-3.5 mr-1.5" />
             {submitting ? "Submitting…" : "Submit"}
           </Button>
@@ -323,11 +323,11 @@ export default function ProblemDetailPage() {
       {/* Workspace */}
       <ResizablePanelGroup direction="horizontal" className="flex-1 min-h-0">
         {/* LEFT: description / submissions */}
-        <ResizablePanel defaultSize={42} minSize={28} className="bg-card/40">
+        <ResizablePanel defaultSize={42} minSize={28} className="bg-background">
           <div className="h-full flex flex-col">
             <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="h-full flex flex-col">
-              <div className="px-3 pt-2 border-b border-border">
-                <TabsList className="bg-transparent p-0 gap-1">
+              <div className="px-3 pt-2 border-b border-border/60">
+                <TabsList className="bg-transparent p-0 gap-1 h-9">
                   <TabsTrigger value="description" className="data-[state=active]:bg-accent">
                     <BookOpen className="size-3.5 mr-1.5" /> Description
                   </TabsTrigger>
@@ -365,7 +365,7 @@ export default function ProblemDetailPage() {
           </div>
         </ResizablePanel>
 
-        <ResizableHandle withHandle className="bg-border" />
+        <ResizableHandle withHandle className="bg-border/60 w-px" />
 
         {/* RIGHT: editor + result (branched for STDIO) */}
         <ResizablePanel defaultSize={58} minSize={30}>
@@ -388,10 +388,10 @@ export default function ProblemDetailPage() {
             <ResizablePanelGroup direction="vertical">
               {/* Editor */}
               <ResizablePanel defaultSize={62} minSize={20}>
-                <div className="h-full flex flex-col bg-card">
-                  <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-muted/40">
+                <div className="h-full flex flex-col bg-background">
+                  <div className="flex items-center gap-2 px-3 py-2 border-b border-border/60 bg-transparent">
                     <Select value={language} onValueChange={setLanguage}>
-                      <SelectTrigger className="w-[150px] h-8 border-border bg-background text-foreground text-xs">
+                      <SelectTrigger className="w-[150px] h-8 border-border/60 bg-background text-foreground text-xs shadow-sm focus:ring-1 focus:ring-primary">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -405,7 +405,7 @@ export default function ProblemDetailPage() {
                         fn: <span className="text-primary">{problem.functionName}</span>
                       </span>
                     )}
-                    <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground" onClick={resetCode}>
+                    <Button variant="ghost" size="sm" className="h-8 text-muted-foreground hover:text-foreground" onClick={resetCode}>
                       <RotateCcw className="size-3.5 mr-1.5" /> Reset
                     </Button>
                     <span className="ml-auto text-xs text-muted-foreground font-mono">
@@ -416,14 +416,14 @@ export default function ProblemDetailPage() {
                 </div>
               </ResizablePanel>
 
-              <ResizableHandle withHandle className="bg-border" />
+              <ResizableHandle withHandle className="bg-border/60 h-px" />
 
               {/* Result panel */}
-              <ResizablePanel defaultSize={38} minSize={15} className="bg-card/40">
+              <ResizablePanel defaultSize={38} minSize={15} className="bg-background">
                 <div className="h-full flex flex-col">
                   <Tabs value={resultTab} onValueChange={(v) => setResultTab(v as any)} className="h-full flex flex-col">
-                    <div className="px-3 pt-2 border-b border-border">
-                      <TabsList className="bg-transparent p-0 gap-1">
+                    <div className="px-3 pt-2 border-b border-border/60">
+                      <TabsList className="bg-transparent p-0 gap-1 h-9">
                         <TabsTrigger value="testcase" className="data-[state=active]:bg-accent">Examples</TabsTrigger>
                         <TabsTrigger value="result" className="data-[state=active]:bg-accent">Result</TabsTrigger>
                       </TabsList>
@@ -433,7 +433,7 @@ export default function ProblemDetailPage() {
                         {problem.examples.length === 0 ? (
                           <p className="text-sm text-muted-foreground">No examples for this problem.</p>
                         ) : problem.examples.map((ex, i) => (
-                          <div key={i} className="rounded-lg border border-border bg-card p-3">
+                          <div key={i} className="rounded-lg border border-border/60 bg-card p-3 shadow-sm">
                             <div className="text-xs font-semibold text-muted-foreground mb-2">Example {i + 1}</div>
                             <div className="space-y-2 text-sm font-mono">
                               <KV k="Input"  v={ex.input} />
@@ -480,10 +480,10 @@ function StdioWorkspace({
     <ResizablePanelGroup direction="vertical">
       {/* Editor */}
       <ResizablePanel defaultSize={55} minSize={20}>
-        <div className="h-full flex flex-col bg-card">
-          <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-muted/40">
+        <div className="h-full flex flex-col bg-background">
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-border/60 bg-transparent">
             <Select value={language} onValueChange={setLanguage}>
-              <SelectTrigger className="w-[150px] h-8 border-border bg-background text-foreground text-xs">
+              <SelectTrigger className="w-[150px] h-8 border-border/60 bg-background text-foreground text-xs shadow-sm focus:ring-1 focus:ring-primary">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -495,7 +495,7 @@ function StdioWorkspace({
             <span className="text-[11px] uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
               Full Program
             </span>
-            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground" onClick={resetCode}>
+            <Button variant="ghost" size="sm" className="h-8 text-muted-foreground hover:text-foreground" onClick={resetCode}>
               <RotateCcw className="size-3.5 mr-1.5" /> Reset
             </Button>
             <span className="ml-auto text-xs text-muted-foreground font-mono">
@@ -506,15 +506,15 @@ function StdioWorkspace({
         </div>
       </ResizablePanel>
 
-      <ResizableHandle withHandle className="bg-border" />
+      <ResizableHandle withHandle className="bg-border/60 h-px" />
 
       {/* Stdin / Stdout panels */}
-      <ResizablePanel defaultSize={45} minSize={15} className="bg-card/40">
+      <ResizablePanel defaultSize={45} minSize={15} className="bg-background">
         <ResizablePanelGroup direction="horizontal">
           {/* Stdin */}
           <ResizablePanel defaultSize={50} minSize={20}>
             <div className="h-full flex flex-col">
-              <div className="px-3 py-2 border-b border-border bg-muted/40 flex items-center gap-2">
+              <div className="px-3 py-2 border-b border-border/60 bg-transparent flex items-center gap-2">
                 <Terminal className="size-3.5 text-muted-foreground" />
                 <span className="text-xs font-medium">stdin</span>
               </div>
@@ -523,17 +523,17 @@ function StdioWorkspace({
                 onChange={(e) => setStdin(e.target.value)}
                 placeholder="Enter input here..."
                 spellCheck={false}
-                className="flex-1 w-full p-3 bg-card text-foreground font-mono text-[13px] leading-relaxed resize-none focus:outline-none scrollbar-thin"
+                className="flex-1 w-full p-3 bg-transparent text-foreground font-mono text-[13px] leading-relaxed resize-none outline-none scrollbar-thin"
               />
             </div>
           </ResizablePanel>
 
-          <ResizableHandle withHandle className="bg-border" />
+          <ResizableHandle withHandle className="bg-border/60 w-px" />
 
           {/* Stdout / Result */}
           <ResizablePanel defaultSize={50} minSize={20}>
-            <div className="h-full flex flex-col">
-              <div className="px-3 py-2 border-b border-border bg-muted/40 flex items-center gap-2">
+            <div className="h-full flex flex-col border-l border-border/60">
+              <div className="px-3 py-2 border-b border-border/60 bg-transparent flex items-center gap-2">
                 <Terminal className="size-3.5 text-muted-foreground" />
                 <span className="text-xs font-medium">Output</span>
                 {stdioRunResult && (

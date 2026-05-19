@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { api, tokens, ApiError } from "./api";
+import { api, ApiError } from "./api";
 import type { AuthResponse, User } from "./types";
 
 interface AuthState {
@@ -22,17 +22,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({ user: null, loading: true, error: null });
 
   const refreshMe = useCallback(async () => {
-    if (!tokens.access) {
-      setState(s => ({ ...s, user: null, loading: false }));
-      return null;
-    }
     try {
       const me = await api<User>("/auth/me");
       setState({ user: me, loading: false, error: null });
       return me;
     } catch (e) {
       setState({ user: null, loading: false, error: null });
-      tokens.clear();
       return null;
     }
   }, []);
@@ -42,7 +37,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refreshMe]);
 
   const setSession = useCallback((resp: AuthResponse) => {
-    tokens.set(resp.accessToken, resp.refreshToken);
     setState({ user: resp.user, loading: false, error: null });
   }, []);
 
@@ -50,7 +44,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState(s => ({ ...s, loading: true, error: null }));
     try {
       const r = await api<AuthResponse>("/auth/login", { body: { emailOrUsername, password } });
-      tokens.set(r.accessToken, r.refreshToken);
       setState({ user: r.user, loading: false, error: null });
       return r.user;
     } catch (e: any) {
@@ -64,7 +57,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState(s => ({ ...s, loading: true, error: null }));
     try {
       const r = await api<AuthResponse>("/auth/register", { body: data });
-      tokens.set(r.accessToken, r.refreshToken);
       setState({ user: r.user, loading: false, error: null });
       return r.user;
     } catch (e: any) {
@@ -75,12 +67,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
-    const refresh = tokens.refresh;
-    tokens.clear();
     setState({ user: null, loading: false, error: null });
-    if (refresh) {
-      try { await api("/auth/logout", { body: { refreshToken: refresh }, auth: false }); } catch {}
-    }
+    try { await api("/auth/logout", { method: "POST", auth: false }); } catch {}
   }, []);
 
   const value = useMemo<AuthContextValue>(() => ({

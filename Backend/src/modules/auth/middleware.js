@@ -22,10 +22,15 @@ export const ROLES = Object.freeze({
 
 const ROLE_VALUES = new Set(Object.values(ROLES));
 
-/** Look up a Bearer access token and resolve it to a user row, or null. */
+/** Look up an access token (Bearer or cookie) and resolve it to a user row, or null. */
 async function resolveUserFromAuthHeader(req) {
+  let token = null;
   const header = req.headers.authorization || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  if (header.startsWith('Bearer ')) {
+    token = header.slice(7);
+  } else if (req.cookies && req.cookies.accessToken) {
+    token = req.cookies.accessToken;
+  }
   if (!token) return null;
 
   const payload = verifyAccessToken(token);
@@ -37,12 +42,8 @@ async function resolveUserFromAuthHeader(req) {
 /** Reject the request with 401 unless a valid access token is provided. */
 export function requireAuth(req, res, next) {
   Promise.resolve((async () => {
-    const header = req.headers.authorization || '';
-    const hasBearer = header.startsWith('Bearer ');
-    if (!hasBearer) return res.status(401).json({ error: 'Unauthorized' });
-
     const user = await resolveUserFromAuthHeader(req);
-    if (!user) return res.status(401).json({ error: 'Invalid or expired token' });
+    if (!user) return res.status(401).json({ error: 'Unauthorized or expired token' });
 
     req.user = user;
     next();
@@ -84,13 +85,8 @@ export function requireRole(...allowed) {
 
   return function requireRoleMiddleware(req, res, next) {
     Promise.resolve((async () => {
-      const header = req.headers.authorization || '';
-      if (!header.startsWith('Bearer ')) {
-        return res.status(401).json({ error: 'Unauthorized' });
-      }
-
       const user = await resolveUserFromAuthHeader(req);
-      if (!user) return res.status(401).json({ error: 'Invalid or expired token' });
+      if (!user) return res.status(401).json({ error: 'Unauthorized or expired token' });
 
       if (!allowedSet.has(user.role)) {
         return res.status(403).json({ error: 'Forbidden' });

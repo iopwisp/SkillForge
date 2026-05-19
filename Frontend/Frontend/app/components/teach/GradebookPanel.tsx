@@ -14,7 +14,7 @@
 import { useEffect, useState } from "react";
 import { Download, Trophy, Users } from "lucide-react";
 import { toast } from "sonner";
-import { api, ApiError, API_URL, tokens } from "~/lib/api";
+import { api, ApiError, API_URL } from "~/lib/api";
 import { Button } from "~/components/ui/button";
 import { Empty } from "~/components/common/Empty";
 import type { Gradebook } from "~/lib/teaching-types";
@@ -37,7 +37,7 @@ export function GradebookPanel({ courseSlug }: { courseSlug: string }) {
     setDownloading(true);
     try {
       const res = await fetch(`${API_URL}/courses/${courseSlug}/gradebook.csv`, {
-        headers: tokens.access ? { Authorization: `Bearer ${tokens.access}` } : {},
+        credentials: "include",
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();

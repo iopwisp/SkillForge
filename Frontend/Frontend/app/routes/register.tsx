@@ -110,7 +110,7 @@ export default function RegisterPage() {
             </button>
           </div>
         </div>
-        <Button type="submit" disabled={submitting} className="w-full gradient-bg text-white border-0 h-10">
+        <Button type="submit" disabled={submitting} className="w-full h-11 font-semibold rounded-xl bg-foreground text-background hover:bg-foreground/90 shadow-sm transition-all">
           {submitting ? "Creating account…" : "Create account"}
         </Button>
       </form>

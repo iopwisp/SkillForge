@@ -96,7 +96,7 @@ export default function LoginPage() {
             </button>
           </div>
         </div>
-        <Button type="submit" disabled={submitting} className="w-full gradient-bg text-white border-0 h-10">
+        <Button type="submit" disabled={submitting} className="w-full h-11 font-semibold rounded-xl bg-foreground text-background hover:bg-foreground/90 shadow-sm transition-all">
           {submitting ? "Signing in…" : "Sign in"}
         </Button>
       </form>
@@ -129,40 +129,90 @@ function Separator({ children }: { children: React.ReactNode }) {
 
 export function AuthLayout({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <div className="min-h-screen grid lg:grid-cols-2">
-      <div className="relative hidden lg:flex flex-col justify-between p-10 gradient-bg text-white overflow-hidden">
-        <div className="absolute inset-0 opacity-30 mix-blend-overlay"
-          style={{ backgroundImage: "radial-gradient(ellipse 60% 60% at 30% 20%, white, transparent 60%), radial-gradient(ellipse 60% 60% at 80% 90%, #00f, transparent 60%)" }} />
-        <Link to="/" className="relative flex items-center gap-2">
-          <Logo className="size-9 bg-white/15 backdrop-blur" />
-          <span className="text-xl font-bold">SkillForge</span>
+    <div className="min-h-screen grid lg:grid-cols-2 bg-background">
+      {/* Left panel — theme-aware but visually rich */}
+      <div className="relative hidden lg:flex flex-col items-center justify-center bg-card/30 border-r border-border/40 overflow-hidden">
+        {/* Ambient glows */}
+        <div className="absolute top-[10%] left-[20%] w-[500px] h-[500px] bg-primary/10 blur-[120px] rounded-full pointer-events-none" />
+        <div className="absolute bottom-[5%] right-[10%] w-[400px] h-[400px] bg-primary/5 blur-[100px] rounded-full pointer-events-none" />
+        {/* Dot grid pattern (adaptive) */}
+        <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.1] pointer-events-none"
+          style={{ backgroundImage: "radial-gradient(circle, currentColor 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
+
+        {/* Logo top-left */}
+        <Link to="/" className="absolute top-8 left-8 flex items-center gap-2.5 z-10">
+          <Logo className="size-7" />
+          <span className="text-lg font-semibold tracking-tight">SkillForge</span>
         </Link>
-        <div className="relative max-w-md">
-          <p className="text-2xl lg:text-3xl font-semibold leading-snug">
-            Focus on real problems, track real progress, and keep your practice consistent.
+
+        {/* Center content */}
+        <div className="relative z-10 flex flex-col items-center text-center px-12 max-w-lg mt-12">
+          <p className="text-3xl lg:text-4xl font-bold leading-[1.15] tracking-tighter text-transparent bg-clip-text bg-gradient-to-b from-foreground to-foreground/60">
+            A new standard for<br />engineering practice.
           </p>
-          <div className="mt-4 flex items-center gap-3">
-            <div className="size-10 rounded-full bg-white/20 grid place-items-center font-bold">SF</div>
-            <div>
-              <div className="text-sm font-semibold">SkillForge workspace</div>
-              <div className="text-xs text-white/70">Algorithms · Frontend · Backend · SQL</div>
+          <p className="mt-4 text-sm text-muted-foreground max-w-sm leading-relaxed">
+            Real problems, instant feedback, and professional problem sets to forge true engineering skills.
+          </p>
+
+          {/* Floating code card */}
+          <div className="mt-10 w-full rounded-xl border border-border/60 bg-card/60 shadow-xl backdrop-blur-md overflow-hidden text-left">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-border/60 bg-muted/30">
+              <div className="flex gap-1.5">
+                <span className="size-2.5 rounded-full bg-border" />
+                <span className="size-2.5 rounded-full bg-border" />
+                <span className="size-2.5 rounded-full bg-border" />
+              </div>
+              <span className="ml-3 text-[11px] font-mono text-muted-foreground tracking-wider">solution.ts</span>
+            </div>
+            <pre className="px-5 py-4 text-[12px] leading-relaxed font-mono text-foreground/80 overflow-hidden">
+<span className="text-[#c678dd]">function</span> <span className="text-[#61afef]">twoSum</span>(<span className="text-[#e5c07b]">nums</span>: number[], <span className="text-[#e5c07b]">target</span>: number) {`{`}{"\n"}
+{"  "}<span className="text-[#c678dd]">const</span> map = <span className="text-[#c678dd]">new</span> <span className="text-[#61afef]">Map</span>();{"\n"}
+{"  "}<span className="text-[#c678dd]">for</span> (<span className="text-[#c678dd]">let</span> i = <span className="text-[#d19a66]">0</span>; i {"<"} nums.length; i++) {`{`}{"\n"}
+{"    "}<span className="text-[#c678dd]">if</span> (map.has(target - nums[i])){"\n"}
+{"      "}<span className="text-[#c678dd]">return</span> [map.get(target - nums[i]), i];{"\n"}
+{"    "}map.set(nums[i], i);{"\n"}
+{"  }"}{"\n"}
+{"}"}</pre>
+            <div className="border-t border-border/60 px-5 py-3 flex items-center gap-5 text-[11px] font-mono tracking-wider text-muted-foreground bg-muted/20">
+              <span><span className="text-emerald-500 font-bold">✓</span> ACCEPTED</span>
+              <span>52ms</span>
+              <span>42.1MB</span>
+            </div>
+          </div>
+
+          {/* Stats row */}
+          <div className="mt-10 flex items-center justify-center gap-8 text-muted-foreground text-xs">
+            <div className="text-center">
+              <div className="text-xl font-bold text-foreground tabular-nums">200+</div>
+              <div className="mt-0.5">Problems</div>
+            </div>
+            <div className="w-px h-8 bg-border" />
+            <div className="text-center">
+              <div className="text-xl font-bold text-foreground tabular-nums">5</div>
+              <div className="mt-0.5">Languages</div>
+            </div>
+            <div className="w-px h-8 bg-border" />
+            <div className="text-center">
+              <div className="text-xl font-bold text-foreground tabular-nums">∞</div>
+              <div className="mt-0.5">Practice</div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="flex flex-col">
-        <div className="flex justify-end p-4">
-          <Link to="/" className="text-sm text-muted-foreground hover:text-foreground">← Back to home</Link>
+      {/* Right panel — form */}
+      <div className="flex flex-col relative overflow-hidden">
+        <div className="flex justify-end p-6 relative z-10">
+          <Link to="/" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">← Back to home</Link>
         </div>
-        <div className="flex-1 flex items-center justify-center p-6">
-          <div className="w-full max-w-md">
-            <div className="lg:hidden flex items-center gap-2 mb-8">
+        <div className="flex-1 flex items-center justify-center p-6 relative z-10">
+          <div className="w-full max-w-sm">
+            <div className="lg:hidden flex items-center gap-2 mb-10">
               <Logo className="size-8" />
-              <span className="font-bold text-lg">SkillForge</span>
+              <span className="font-semibold text-lg tracking-tight">SkillForge</span>
             </div>
-            <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
-            {subtitle && <p className="mt-1.5 text-sm text-muted-foreground">{subtitle}</p>}
+            <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
+            {subtitle && <p className="mt-2 text-sm text-muted-foreground">{subtitle}</p>}
             <div className="mt-8">
               {children}
             </div>
