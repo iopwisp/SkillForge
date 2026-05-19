@@ -8,22 +8,20 @@ export function Logo({ className }: { className?: string }) {
   return (
     <span className={cn("inline-flex items-center justify-center rounded-lg gradient-bg shadow-md shadow-primary/20", className)}>
       <svg
-        viewBox="0 0 24 24"
-        className="w-[68%] h-[68%] text-white"
-        fill="none"
+        viewBox="0 0 100 100"
+        className="w-[70%] h-[70%] text-white animate-fade-in"
+        fill="currentColor"
         xmlns="http://www.w3.org/2000/svg"
         aria-hidden
       >
-        {/* Tusk curve */}
+        {/* Anvil shape */}
         <path
-          d="M5 4 C 13 4, 18 9, 18 16 C 18 19, 16 21, 13 21 L 11.5 21 L 11.5 17 C 14 17, 14 14, 12 13 C 9 11, 7 9.5, 7 7 L 5 4 Z"
-          fill="currentColor"
-          opacity="0.95"
+          d="M 16,40 L 74,40 L 74,48 C 62,48 55,50 55,56 C 55,62 60,66 68,68 C 72,68 74,70 74,74 L 74,76 L 26,76 L 26,74 C 26,70 28,68 32,68 C 40,66 45,62 45,56 C 45,50 38,48 16,42 Z"
         />
-        {/* Pixel notch (the "hub" cell) */}
-        <rect x="14" y="6" width="3" height="3" rx="0.5" fill="currentColor" opacity="0.6" />
-        {/* Crossbar of T */}
-        <path d="M3 5 H 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        {/* Sparkle / Four-pointed star */}
+        <path
+          d="M 52,14 Q 52,22 44,22 Q 52,22 52,30 Q 52,22 60,22 Q 52,22 52,14 Z"
+        />
       </svg>
     </span>
   );

@@ -16,7 +16,7 @@ import { ThemeProvider } from "./lib/theme";
 import { Toaster } from "./components/ui/sonner";
 
 export const links: Route.LinksFunction = () => [
-  { rel: "icon", href: "/favicon.ico" },
+  { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
