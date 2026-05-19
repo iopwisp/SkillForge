@@ -36,7 +36,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             __html: `
               try {
                 var t = localStorage.getItem('skillforge.theme');
-                if (!t) t = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+                if (!t) t = 'light';
                 if (t === 'dark') document.documentElement.classList.add('dark');
                 document.documentElement.style.colorScheme = t;
               } catch (e) {}

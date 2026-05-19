@@ -1,7 +1,7 @@
 import { Link } from "react-router";
 import {
   Code2, Sparkles, Trophy, Zap, BarChart3, Users, ChevronRight,
-  ArrowRight, Star,
+  ArrowRight, Star, Sun, Moon,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Logo } from "~/components/brand/Logo";
@@ -54,7 +54,7 @@ export default function Landing() {
 
           <div className="ml-auto flex items-center gap-3">
             <Button variant="ghost" size="icon" onClick={toggle} aria-label="Toggle theme" className="text-muted-foreground rounded-full size-8">
-              <Sparkles className="size-4" />
+              {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
             </Button>
             {user ? (
               <Button asChild size="sm" className="rounded-full h-8 px-4"><Link to="/dashboard">Dashboard</Link></Button>
